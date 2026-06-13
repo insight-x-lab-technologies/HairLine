@@ -1,0 +1,107 @@
+# Deploy do HAIRLINE.
+#
+# Ordem: 1) build único → 2) GitHub Pages (deploy PRIMÁRIO, ao vivo em
+# https://insight-x-lab-technologies.github.io/HairLine) → 3) Cloudflare Pages
+# (secundário, só roda quando os secrets existirem — conta ainda não criada).
+#
+# PRÉ-REQUISITO GitHub Pages: em Settings → Pages, definir "Source: GitHub
+# Actions" (uma vez). O `base: './'` do Vite já gera URLs relativas, então o
+# site funciona no subcaminho /HairLine/ sem ajuste.
+#
+# PRÉ-REQUISITO Cloudflare (futuro): secrets CLOUDFLARE_API_TOKEN (permissão
+# "Cloudflare Pages: Edit") e CLOUDFLARE_ACCOUNT_ID + projeto Pages "hairline"
+# (ver wrangler.toml). Sem o token, o job Cloudflare é pulado (não falha).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write # deploy no GitHub Pages
+  id-token: write # OIDC exigido pelo actions/deploy-pages
+  deployments: write # status de deployment (Cloudflare)
+
+# Não cancela um deploy do Pages em andamento (evita publicação corrompida).
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Build único: o artefato é reaproveitado pelo deploy do GitHub Pages.
+  build:
+    name: build (produção + PWA)
+    runs-on: ubuntu-latest
+    outputs:
+      has_cloudflare: ${{ steps.secrets.outputs.has_cloudflare }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (clean)
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Upload artefato do Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      # Secrets não podem ser usados em `if:` de job; expõe a presença do token
+      # como output (apenas 'true'/'false', nunca o valor).
+      - name: Detecta secrets da Cloudflare
+        id: secrets
+        run: echo "has_cloudflare=${{ secrets.CLOUDFLARE_API_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
+  # Deploy PRIMÁRIO: GitHub Pages.
+  github-pages:
+    name: deploy · GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # Deploy SECUNDÁRIO: Cloudflare Pages — só após o GitHub Pages e só quando os
+  # secrets existirem (enquanto a conta não é criada, o job é pulado).
+  cloudflare-pages:
+    name: deploy · Cloudflare Pages
+    needs: [build, github-pages]
+    if: ${{ needs.build.outputs.has_cloudflare == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (clean)
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=hairline --branch=main
