@@ -1,6 +1,6 @@
 import type { BulletPool } from '../entities/BulletPool';
 import type { EnemyPool } from '../entities/EnemyPool';
-import type { Boss } from './BossSystem';
+import type { Boss, BossSystem } from './BossSystem';
 import type { GameState } from '../sim/GameState';
 
 /**
@@ -57,6 +57,63 @@ export function resolveShotsVsBoss(shots: BulletPool, boss: Boss): boolean {
     const dy = shot.y - boss.y;
     if (dx * dx + dy * dy <= rr * rr) {
       shots.despawn(shot);
+      if (boss.onHit(1)) defeated = true;
+    }
+  });
+  return defeated;
+}
+
+/**
+ * Tiros do jogador × chefe COM mecânicas (P4-02b): ordem fixa e determinística
+ * por tiro — (1) partes destrutíveis (índice crescente), (2) escudo ativo, (3)
+ * núcleo. Enquanto houver parte viva o núcleo é invulnerável; com escudo ativo o
+ * dano vai ao escudo, não ao núcleo. Cada tiro acerta no máximo um alvo.
+ * Retorna true se o chefe foi derrotado neste tick.
+ */
+export function resolveShotsVsBossSystem(
+  shots: BulletPool,
+  sys: BossSystem,
+  state: GameState,
+): boolean {
+  const boss = sys.boss;
+  if (!boss.alive) return false;
+  let defeated = false;
+  const parts = sys.parts;
+  const coreVulnerable = sys.coreVulnerable;
+
+  shots.forEachActive((shot) => {
+    if (defeated) return;
+
+    // (1) Partes destrutíveis primeiro (ordem de índice).
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!;
+      if (!part.alive) continue;
+      const rr = shot.radius + part.radius;
+      const dx = shot.x - part.x;
+      const dy = shot.y - part.y;
+      if (dx * dx + dy * dy <= rr * rr) {
+        part.hp -= 1;
+        shots.despawn(shot);
+        if (part.hp <= 0) {
+          part.hp = 0;
+          part.alive = false;
+          if (part.scorePerDefeat > 0) state.addScore(part.scorePerDefeat);
+        }
+        return; // tiro consumido por esta parte
+      }
+    }
+
+    // (2)/(3) Núcleo: só se vulnerável (sem partes vivas) e dentro do raio.
+    const rr = shot.radius + boss.radius;
+    const dx = shot.x - boss.x;
+    const dy = shot.y - boss.y;
+    if (dx * dx + dy * dy <= rr * rr) {
+      shots.despawn(shot); // o corpo do chefe absorve o tiro
+      if (!coreVulnerable) return; // partes vivas: núcleo imune
+      if (sys.shieldActive) {
+        sys.hitShield();
+        return;
+      }
       if (boss.onHit(1)) defeated = true;
     }
   });

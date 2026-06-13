@@ -6,6 +6,19 @@
   "homeY": 250,
   "sweepAmplitudePx": 200,
   "sweepPeriodTicks": 280,
-  "phasePatternIds": ["spiral-aimed", "cross"],
-  "defeatScore": 7000
+  "defeatScore": 7000,
+  "shape": "circle",
+  "color": "#b56cff",
+  "scorePerPartDefeat": 500,
+  "phases": [
+    {
+      "patternId": "spiral-aimed",
+      "untilHpPct": 0.5,
+      "parts": [
+        { "offsetXPx": -78, "offsetYPx": 6, "radiusPx": 22, "hp": 18, "patternId": "aimed" },
+        { "offsetXPx": 78, "offsetYPx": 6, "radiusPx": 22, "hp": 18, "patternId": "aimed" }
+      ]
+    },
+    { "patternId": "cross", "untilHpPct": 0 }
+  ]
 }

@@ -73,6 +73,23 @@ localStorage com fallback em memória e store injetável (testável).
 `scripts/run.sh` usa `--host` + `server.allowedHosts: true` (Vite) para acesso
 via LAN/Tailscale; não-bloqueante (setsid + pidfile); `--strictPort` 8080.
 
+## TD-17 — Fases de chefe data-driven + mecânicas compostas (P4-02b) ✅
+`BossDef.phases: BossPhaseDef[]` substitui `phasePatternIds` (sem suporte duplo —
+o jogo não lançou). Cada fase declara `patternId` + `untilHpPct` e, opcionalmente,
+`shield` / `adds` / `parts` / `movement`. Decisões fechadas:
+- **Transição de fase = função pura do HP**, dentro de `Boss.onHit` (mesmo ponto
+  de antes, preserva hash); `BossSystem` reconcilia as mecânicas no `update`
+  seguinte quando `phaseIndex` muda (1 tick depois, determinístico).
+- **`BossSystem` recebe um `Rng` semeado PRÓPRIO e isolado** (derivado da seed da
+  run), usado só pelo teleporte. Não toca o stream principal da simulação ⇒
+  chefes sem `movement` não consomem aleatoriedade e runs antigas de chefes
+  `sweep` ficam byte-idênticas. Os adds usam **offsets fixos** (sem Rng).
+- **Contrato de colisão ampliado**: `resolveShotsVsBossSystem(shots, sys, state)`
+  resolve, por tiro e em ordem fixa, partes → escudo → núcleo (o antigo
+  `resolveShotsVsBoss(shots, boss)` segue para o caminho só-núcleo).
+- **Hash**: escudo (HP), partes (vivas/soma de HP) e ciclo de teleporte
+  (telegraph + posição) entram no checksum — replay/anti-cheat cobrem a luta.
+
 ## Decisões em aberto (revisitar quando necessário)
 - Formato compacto de replay (bitpacking de inputs) — hoje é array por tick.
 - Atlas único de sprites vs `Graphics` — só se a performance exigir (Fase 5).

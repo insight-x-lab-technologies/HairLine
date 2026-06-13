@@ -73,6 +73,73 @@ export interface Wave {
   readonly entries: readonly WaveEntry[];
 }
 
+/**
+ * Escudo de fase (P4-02b-02): invulnerabilidade quebrável a tiros. Enquanto
+ * ativo, os tiros reduzem o HP do escudo, não o do chefe. Com `rechargeTicks`,
+ * volta cheio após o intervalo, dentro da mesma fase.
+ */
+export interface BossShieldDef {
+  readonly hp: number;
+  readonly rechargeTicks?: number;
+}
+
+/**
+ * Lacaios de fase (P4-02b-03): a fase invoca `count` inimigos `enemyId` a cada
+ * `intervalTicks` (idade da fase), respeitando `maxAlive` simultâneos.
+ */
+export interface BossAddsDef {
+  readonly enemyId: string;
+  readonly count: number;
+  readonly intervalTicks: number;
+  readonly maxAlive: number;
+}
+
+/**
+ * Parte destrutível (P4-02b-04): sub-alvo com hitbox/HP próprios, preso ao corpo
+ * do chefe por um offset. Enquanto houver parte viva na fase, o núcleo é
+ * invulnerável. Pode emitir seu próprio padrão (idade = `phaseAge`).
+ */
+export interface BossPartDef {
+  readonly offsetXPx: number;
+  readonly offsetYPx: number;
+  readonly radiusPx: number;
+  readonly hp: number;
+  readonly patternId?: string;
+  /** Pontos por destruir esta parte (default: `BossDef.scorePerPartDefeat`). */
+  readonly scorePerDefeat?: number;
+}
+
+/**
+ * Movimento de fase (P4-02b-05): `sweep` (vaivém senoidal, default) ou
+ * `teleport` (salto determinístico com telegraph). Ausente ⇒ `sweep`.
+ */
+export type BossMovementDef =
+  | { readonly type: 'sweep' }
+  | {
+      readonly type: 'teleport';
+      /** Ticks entre saltos (idade da fase). */
+      readonly intervalTicks: number;
+      /** Ticks de aviso (destino exposto) antes do reposicionamento. */
+      readonly telegraphTicks: number;
+      /** Margem mínima das bordas/topo ao sortear o destino (px). */
+      readonly regionPadPx: number;
+    };
+
+/**
+ * Definição de uma fase de chefe (P4-02b-01). A fase vale enquanto
+ * `hp/maxHp > untilHpPct`; a última fase usa `untilHpPct === 0`. Os campos de
+ * mecânica (escudo/adds/partes/movimento) são opcionais e compõem livremente.
+ */
+export interface BossPhaseDef {
+  readonly patternId: string;
+  /** Limiar inferior de HP% desta fase (estritamente decrescente; última = 0). */
+  readonly untilHpPct: number;
+  readonly shield?: BossShieldDef;
+  readonly adds?: BossAddsDef;
+  readonly parts?: readonly BossPartDef[];
+  readonly movement?: BossMovementDef;
+}
+
 export interface BossDef {
   readonly id: string;
   readonly hp: number;
@@ -85,8 +152,14 @@ export interface BossDef {
   readonly sweepAmplitudePx: number;
   /** Período do vaivém (ticks). */
   readonly sweepPeriodTicks: number;
-  /** Id do padrão de bala por fase (índice = fase). 2 fases na Fase 1. */
-  readonly phasePatternIds: readonly string[];
+  /** Fases declarativas (índice = ordem). Mínimo 2; thresholds decrescentes. */
+  readonly phases: readonly BossPhaseDef[];
   /** Pontos por derrotar o chefe. */
   readonly defeatScore: number;
+  /** Pontos por destruir uma parte (default das partes sem `scorePerDefeat`). */
+  readonly scorePerPartDefeat?: number;
+  /** Forma visual do corpo (apresentação): circle | hex | diamond | triangle. */
+  readonly shape?: string;
+  /** Cor neon base (apresentação), ex.: "#ff5d8f". */
+  readonly color?: string;
 }

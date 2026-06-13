@@ -19,6 +19,8 @@ export class Enemy {
   /** Apresentação (não afeta a lógica): forma e cor neon. */
   shape = 'circle';
   color = '#ff5d8f';
+  /** Invocado por um chefe como add (P4-02b-03): conta para maxAlive/limpeza. */
+  summonedByBoss = false;
 }
 
 /**
@@ -71,6 +73,7 @@ export class EnemyPool {
     e.pattern = pattern;
     e.ageTicks = 0;
     e.alive = true;
+    e.summonedByBoss = false;
     this.active++;
     return e;
   }

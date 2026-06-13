@@ -6,6 +6,15 @@
   "homeY": 250,
   "sweepAmplitudePx": 180,
   "sweepPeriodTicks": 300,
-  "phasePatternIds": ["spiral", "ring"],
-  "defeatScore": 6000
+  "defeatScore": 6000,
+  "shape": "circle",
+  "color": "#4cc9f0",
+  "phases": [
+    { "patternId": "spiral", "untilHpPct": 0.5 },
+    {
+      "patternId": "ring",
+      "untilHpPct": 0,
+      "movement": { "type": "teleport", "intervalTicks": 150, "telegraphTicks": 45, "regionPadPx": 80 }
+    }
+  ]
 }

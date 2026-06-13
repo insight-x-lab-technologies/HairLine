@@ -137,6 +137,14 @@ class AudioService {
       case 'victory':
         this.arp([523, 659, 784, 1046], 0.12, 0.4);
         break;
+      case 'bossshield':
+        // Quebra de escudo: varredura metálica descendente.
+        this.sweep(1200, 220, 0.3, 0.4);
+        break;
+      case 'bossteleport':
+        // Aviso de teleporte: bipe agudo ascendente.
+        this.blip(620, 0.14, 'sine', 0.3, 320);
+        break;
     }
   }
 

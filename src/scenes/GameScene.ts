@@ -328,6 +328,9 @@ export class GameScene extends Phaser.Scene {
       case 'victory':
         cam.flash(300, 120, 255, 230);
         break;
+      case 'bossshield':
+        cam.flash(160, 90, 200, 240); // escudo quebrou: flash ciano
+        break;
     }
   }
 
@@ -336,6 +339,17 @@ export class GameScene extends Phaser.Scene {
     this.bossGfx.clear();
     const boss = this.sim.boss;
     if (!boss || !boss.alive) return;
+    const sys = this.sim.activeBossSystem;
+
+    // Telegraph de teleporte (P4-02b-05): marcador pulsante no destino do salto.
+    if (sys && sys.telegraphActive) {
+      const pulse = 0.5 + 0.5 * Math.sin(this.sim.tickCount * 0.4);
+      this.bossGfx
+        .lineStyle(2, 0xffe08a, 0.4 + 0.5 * pulse)
+        .strokeCircle(sys.teleportDestX, sys.teleportDestY, boss.radius * (0.7 + 0.4 * pulse))
+        .lineStyle(2, 0xffe08a, 0.8)
+        .strokeCircle(sys.teleportDestX, sys.teleportDestY, 6);
+    }
 
     // Corpo: cor muda na fase 2 (feedback do "fica mais perigoso").
     const color = boss.phaseIndex === 0 ? 0xff5d8f : 0xff2d55;
@@ -344,6 +358,34 @@ export class GameScene extends Phaser.Scene {
       .lineStyle(3, color, 1)
       .fillCircle(boss.x, boss.y, boss.radius)
       .strokeCircle(boss.x, boss.y, boss.radius);
+
+    // Núcleo invulnerável enquanto há partes vivas (P4-02b-04): aro tracejado.
+    if (sys && !sys.coreVulnerable) {
+      this.bossGfx
+        .lineStyle(2, 0x6cf0ff, 0.5)
+        .strokeCircle(boss.x, boss.y, boss.radius + 7);
+    }
+
+    // Partes destrutíveis (P4-02b-04): pods neon presos ao corpo, com dano.
+    if (sys) {
+      for (const p of sys.parts) {
+        if (!p.alive) continue;
+        const frac = p.maxHp > 0 ? p.hp / p.maxHp : 0;
+        this.bossGfx
+          .fillStyle(0xb56cff, 0.25)
+          .lineStyle(2, 0xd9a6ff, 0.4 + 0.6 * frac)
+          .fillCircle(p.x, p.y, p.radius)
+          .strokeCircle(p.x, p.y, p.radius);
+      }
+    }
+
+    // Escudo ativo (P4-02b-02): anel ciclano ao redor do chefe, espessura ~HP%.
+    if (sys && sys.shieldActive) {
+      const frac = sys.shieldMaxHp > 0 ? sys.shieldHp / sys.shieldMaxHp : 0;
+      this.bossGfx
+        .lineStyle(3 + 4 * frac, 0x4cc9f0, 0.35 + 0.5 * frac)
+        .strokeCircle(boss.x, boss.y, boss.radius + 14);
+    }
 
     // Barra de vida no topo do campo (abaixo da safe-area + linha do HUD).
     const barX = this.hudPad.left + 24;

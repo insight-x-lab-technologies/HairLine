@@ -1,4 +1,5 @@
 import type { BulletPool } from '../entities/BulletPool';
+import type { EnemyPool } from '../entities/EnemyPool';
 import type { Rng } from '../services/Rng';
 import type { GameState } from '../sim/GameState';
 import { BossSystem, type Boss } from './BossSystem';
@@ -40,6 +41,11 @@ export class BossDirector {
     return this.current?.boss ?? null;
   }
 
+  /** BossSystem ativo (para colisão com mecânicas / hash), ou null. */
+  get currentSystem(): BossSystem | null {
+    return this.current;
+  }
+
   update(
     level: number,
     currentTick: number,
@@ -48,24 +54,27 @@ export class BossDirector {
     playerY: number,
     rng: Rng,
     state: GameState,
+    enemies?: EnemyPool,
   ): void {
     if (this.current) {
       // Derrota detectada (dano aplicado pela colisão no tick anterior).
       if (this.current.boss.defeated) {
         state.addScore(this.current.defeatScore);
+        if (enemies) this.current.cleanupAdds(enemies);
         this.current = null;
         this.nextEncounterLevel = level + this.cfg.everyLevels;
         return;
       }
-      this.current.update(currentTick, enemyBullets, playerX, playerY);
+      this.current.update(currentTick, enemyBullets, playerX, playerY, enemies ? { enemies } : undefined);
       return;
     }
 
     if (level >= this.nextEncounterLevel && this.ids.length > 0) {
       const id = rng.pick(this.ids);
-      this.current = new BossSystem(getBoss(id), this.cfg.centerX, false);
+      const rngSeed = rng.nextUint32(); // seed isolada do movimento do chefe
+      this.current = new BossSystem(getBoss(id), this.cfg.centerX, false, rngSeed);
       this.current.spawnNow();
-      this.current.update(currentTick, enemyBullets, playerX, playerY);
+      this.current.update(currentTick, enemyBullets, playerX, playerY, enemies ? { enemies } : undefined);
     }
   }
 }

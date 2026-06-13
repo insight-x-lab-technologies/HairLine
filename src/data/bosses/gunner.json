@@ -6,6 +6,15 @@
   "homeY": 240,
   "sweepAmplitudePx": 240,
   "sweepPeriodTicks": 220,
-  "phasePatternIds": ["wall", "aimed"],
-  "defeatScore": 5500
+  "defeatScore": 5500,
+  "shape": "diamond",
+  "color": "#ffd166",
+  "phases": [
+    { "patternId": "wall", "untilHpPct": 0.5 },
+    {
+      "patternId": "aimed",
+      "untilHpPct": 0,
+      "adds": { "enemyId": "drone", "count": 2, "intervalTicks": 180, "maxAlive": 4 }
+    }
+  ]
 }

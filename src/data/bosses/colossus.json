@@ -1,0 +1,34 @@
+{
+  "id": "colossus",
+  "hp": 220,
+  "radiusPx": 54,
+  "enterTick": 480,
+  "homeY": 250,
+  "sweepAmplitudePx": 210,
+  "sweepPeriodTicks": 320,
+  "defeatScore": 9000,
+  "scorePerPartDefeat": 600,
+  "shape": "hex",
+  "color": "#7cffb2",
+  "phases": [
+    {
+      "patternId": "spiral-aimed",
+      "untilHpPct": 0.66,
+      "parts": [
+        { "offsetXPx": -92, "offsetYPx": 4, "radiusPx": 22, "hp": 16, "patternId": "aimed" },
+        { "offsetXPx": 92, "offsetYPx": 4, "radiusPx": 22, "hp": 16, "patternId": "aimed" }
+      ]
+    },
+    {
+      "patternId": "wall",
+      "untilHpPct": 0.33,
+      "shield": { "hp": 25, "rechargeTicks": 420 },
+      "adds": { "enemyId": "drone", "count": 2, "intervalTicks": 220, "maxAlive": 3 }
+    },
+    {
+      "patternId": "cross",
+      "untilHpPct": 0,
+      "movement": { "type": "teleport", "intervalTicks": 150, "telegraphTicks": 42, "regionPadPx": 70 }
+    }
+  ]
+}

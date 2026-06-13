@@ -50,10 +50,32 @@ cross (**9**).
 
 ## Chefes — `src/data/bosses/*.json`
 
-Campos: `hp`, `radiusPx`, `enterTick`, `homeY`, `sweepAmplitudePx`,
-`sweepPeriodTicks`, `phasePatternIds` (padrão por fase; **2 fases**, troca abaixo
-de 50% de vida), `defeatScore`. Atuais: warden, spinner, gunner, vortex (**4**).
-Movimento: vaivém senoidal. *Falta*: mecânicas únicas (P4-02b).
+Campos base: `hp`, `radiusPx`, `enterTick`, `homeY`, `sweepAmplitudePx`,
+`sweepPeriodTicks`, `defeatScore`, `scorePerPartDefeat?`, `shape?`, `color?`.
+
+**Fases data-driven (P4-02b-01).** `phases: BossPhaseDef[]` — lista ordenada,
+mínimo 2, sem máximo. Cada fase: `{ patternId, untilHpPct, ... }`. A fase vale
+enquanto `hp/maxHp > untilHpPct`; thresholds **estritamente decrescentes** e a
+última fase usa `untilHpPct === 0`. A transição zera `phaseAge` (o padrão da nova
+fase recomeça). Validação no registro (`src/content/index.ts`, `validateBossDef`).
+
+**Mecânicas opcionais por fase (P4-02b-02..05):**
+- `shield: { hp, rechargeTicks? }` — invulnerabilidade quebrável: os tiros gastam
+  o HP do escudo, não o do chefe. Com `rechargeTicks`, volta cheio após o
+  intervalo dentro da mesma fase; sem ele, fica quebrado até a fase trocar.
+- `adds: { enemyId, count, intervalTicks, maxAlive }` — invoca inimigos comuns
+  (via `EnemyPool`, offsets fixos) na cadência da fase, até `maxAlive` vivos;
+  limpos ao derrotar o chefe.
+- `parts: [{ offsetXPx, offsetYPx, radiusPx, hp, patternId?, scorePerDefeat? }]` —
+  sub-alvos presos ao corpo (acompanham o movimento). Enquanto houver parte viva,
+  o **núcleo é invulnerável**. Cada parte pode emitir seu padrão e pontua ao cair.
+- `movement: { type:"sweep" } | { type:"teleport", intervalTicks, telegraphTicks,
+  regionPadPx }` — ausente ⇒ `sweep` (vaivém senoidal, default). `teleport`:
+  ciclo intervalo → telegraph (destino exposto p/ aviso) → salto, destino sorteado
+  por um `Rng` semeado isolado (ver TD-17).
+
+Atuais: warden (escudo), spinner (teleporte), gunner (adds), vortex (partes) e
+**colossus** — clímax de 3 fases (partes → escudo+adds → teleporte) (**5**).
 
 ## Dificuldade (Endless) — `src/data/difficulty.json`
 

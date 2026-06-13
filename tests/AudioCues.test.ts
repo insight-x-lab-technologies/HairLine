@@ -46,4 +46,17 @@ describe('AudioCues — quais sons tocar a partir de deltas (Fase 2)', () => {
     const cur = { ...base, lives: 2, kills: 1, grazeCount: 1 };
     expect(diffCues(base, cur)).toEqual(['hit', 'kill', 'graze']);
   });
+
+  it('escudo do chefe quebra (ativo→inativo) → bossshield (P4-02b-02)', () => {
+    const shielded = { ...base, bossShieldActive: true };
+    expect(diffCues(shielded, { ...shielded, bossShieldActive: false })).toContain('bossshield');
+    // Continuar ativo não gera cue.
+    expect(diffCues(shielded, { ...shielded })).not.toContain('bossshield');
+  });
+
+  it('telegraph de teleporte começa (inativo→ativo) → bossteleport (P4-02b-05)', () => {
+    expect(diffCues(base, { ...base, bossTelegraph: true })).toContain('bossteleport');
+    const tele = { ...base, bossTelegraph: true };
+    expect(diffCues(tele, { ...tele })).not.toContain('bossteleport');
+  });
 });

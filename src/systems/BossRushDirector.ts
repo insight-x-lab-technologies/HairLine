@@ -1,4 +1,5 @@
 import type { BulletPool } from '../entities/BulletPool';
+import type { EnemyPool } from '../entities/EnemyPool';
 import type { GameState } from '../sim/GameState';
 import { Rng } from '../services/Rng';
 import { BossSystem, type Boss } from './BossSystem';
@@ -21,7 +22,7 @@ export class BossRushDirector {
 
   constructor(
     private readonly centerX: number,
-    seed: number,
+    private readonly seed: number,
     ids: readonly string[] = BOSS_IDS,
   ) {
     this.sequence = shuffle(ids, new Rng(seed ^ 0x806b));
@@ -29,6 +30,11 @@ export class BossRushDirector {
 
   get boss(): Boss | null {
     return this.current?.boss ?? null;
+  }
+
+  /** BossSystem ativo (para colisão com mecânicas / hash), ou null. */
+  get currentSystem(): BossSystem | null {
+    return this.current;
   }
 
   get completed(): boolean {
@@ -41,12 +47,14 @@ export class BossRushDirector {
     playerX: number,
     playerY: number,
     state: GameState,
+    enemies?: EnemyPool,
   ): void {
     if (this._completed) return;
 
     // Chefe atual derrotado (dano aplicado pela colisão no tick anterior).
     if (this.current && this.current.boss.defeated) {
       state.addScore(this.current.defeatScore);
+      if (enemies) this.current.cleanupAdds(enemies);
       this.current = null;
       this.index++;
     }
@@ -56,11 +64,18 @@ export class BossRushDirector {
         this._completed = true;
         return;
       }
-      this.current = new BossSystem(getBoss(this.sequence[this.index]!), this.centerX, false);
+      // Seed de movimento isolada e determinística por posição na sequência.
+      const rngSeed = (this.seed ^ (this.index * 0x9e3779b1)) >>> 0;
+      this.current = new BossSystem(
+        getBoss(this.sequence[this.index]!),
+        this.centerX,
+        false,
+        rngSeed,
+      );
       this.current.spawnNow();
     }
 
-    this.current.update(currentTick, enemyBullets, playerX, playerY);
+    this.current.update(currentTick, enemyBullets, playerX, playerY, enemies ? { enemies } : undefined);
   }
 }
 

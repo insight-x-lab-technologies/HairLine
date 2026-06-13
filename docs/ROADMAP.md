@@ -20,8 +20,8 @@
 | 4 | Profundidade de conteúdo | 🟡 em andamento |
 | 5–9+ | Polimento → visão | ⬜ a fazer |
 
-Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 4 chefes, 1 onda autoral**.
-Testes: **204 passando** (32 arquivos). Ver `TEST_STRATEGY.md`.
+Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 1 onda autoral**.
+Testes: **232 passando** (34 arquivos). Ver `TEST_STRATEGY.md`.
 
 ---
 
@@ -86,10 +86,10 @@ Testes: **204 passando** (32 arquivos). Ver `TEST_STRATEGY.md`.
 - ✅ **P4-01** Sintaxe de padrões parametrizável: emitters com `angleStepDeg`,
    `accel`, `speedStep`, `radiusStep`, `aimOffsetDeg` (`PatternSystem`); balas com
    aceleração (`BulletPool`). Biblioteca em 9 padrões.
-- 🟡 **P4-02** Mais chefes com fases/mecânicas próprias. Feito: 4 chefes
-   (warden, spinner, gunner, vortex), 2 fases cada, padrões distintos.
-   **Falta**: mecânicas únicas (escudos, lacaios/adds, partes destrutíveis,
-   teleporte). → abrir como **P4-02b**.
+- ✅ **P4-02** Mais chefes com fases/mecânicas próprias. Fases data-driven
+   (N fases, thresholds em JSON) + escudo, adds, partes destrutíveis e teleporte
+   por fase. 5 chefes (warden=escudo, spinner=teleporte, gunner=adds,
+   vortex=partes, **colossus**=3 fases compondo tudo). Concluído via **P4-02b**.
 - ✅ **P4-03** Variedade de inimigos (7) + **formações** (`Formations`:
    line/vee/column, dirigidas por dados no Endless).
 - 🟡 **P4-04** Modos: **boss rush** ✅ (`BossRushDirector`, mode `bossrush`).
@@ -99,10 +99,12 @@ Testes: **204 passando** (32 arquivos). Ver `TEST_STRATEGY.md`.
 - ⬜ **P4-06** **Ferramenta interna de autoria de padrões** (editor de bullet
    patterns) — preview ao vivo, exportar JSON para `src/data/patterns`.
 
-### Itens derivados (abertos) da Fase 4
-- ⬜ **P4-02b** Mecânicas próprias de chefe (escudo, adds, partes, fases ≥3).
-  Especificado em 6 issues SDD: `docs/issues/P4-02b-*.md` (publicar com
-  `docs/issues/publish.sh`).
+### Itens derivados da Fase 4
+- ✅ **P4-02b** Mecânicas próprias de chefe (escudo, adds, partes, teleporte,
+  fases ≥3). 6 issues SDD (`docs/issues/P4-02b-*.md`) implementadas: schema de
+  fases data-driven, escudo, adds, partes destrutíveis, teleporte e o 5º chefe
+  (colossus) compondo as mecânicas. Ver TD-17 e `tests/BossMechanics.test.ts` /
+  `tests/BossColossus.test.ts`.
 - ⬜ **P4-04b** Estágios curados (formato de "stage" autoral + seletor de fases).
   Especificado em 4 issues SDD: `docs/issues/P4-04b-*.md` (publicar com
   `docs/issues/publish.sh`).

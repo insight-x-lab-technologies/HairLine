@@ -9,7 +9,7 @@ import { emitEnemyBullets } from '../systems/PatternSystem';
 import {
   resolveShotsVsEnemies,
   resolvePlayerVsBullets,
-  resolveShotsVsBoss,
+  resolveShotsVsBossSystem,
 } from '../systems/CollisionSystem';
 import { updateGraze } from '../systems/GrazeSystem';
 import { tryReflectPulse, type ReflectConfig } from '../systems/ReflectPulse';
@@ -106,7 +106,12 @@ export class Simulation {
     this.enemies = new EnemyPool(ENEMY_CAPACITY);
     this.mode = opts.mode ?? 'endless';
     this.spawner = new SpawnSystem(getWave(opts.waveId ?? DEFAULT_WAVE_ID));
-    this.bossSystem = new BossSystem(getBoss(opts.bossId ?? DEFAULT_BOSS_ID), this.bounds.w / 2);
+    this.bossSystem = new BossSystem(
+      getBoss(opts.bossId ?? DEFAULT_BOSS_ID),
+      this.bounds.w / 2,
+      true,
+      opts.seed,
+    );
 
     // Dificuldade com cadência de spawn modificada (mais/menos densa).
     const baseDiff = difficultyData as DifficultyConfig & {
@@ -163,6 +168,13 @@ export class Simulation {
     return this.bossSystem.boss;
   }
 
+  /** BossSystem ativo (mecânicas de P4-02b: escudo/partes/teleporte) ou null. */
+  get activeBossSystem(): BossSystem | null {
+    if (this.mode === 'endless') return this.bossDirector.currentSystem;
+    if (this.mode === 'bossrush') return this.bossRush.currentSystem;
+    return this.bossSystem;
+  }
+
   /**
    * Avança a simulação em exatamente um passo lógico fixo.
    * @param input Intenção abstrata do jogador neste tick (padrão: neutra).
@@ -203,7 +215,9 @@ export class Simulation {
 
     // Chefe: campanha (entrada automática), Endless (encontros) ou Boss Rush.
     if (this.mode === 'campaign') {
-      this.bossSystem.update(this._tickCount, this.enemyBullets, this.player.x, this.player.y);
+      this.bossSystem.update(this._tickCount, this.enemyBullets, this.player.x, this.player.y, {
+        enemies: this.enemies,
+      });
     } else if (this.mode === 'endless') {
       this.bossDirector.update(
         this.level,
@@ -213,6 +227,7 @@ export class Simulation {
         this.player.y,
         this.rng,
         this.state,
+        this.enemies,
       );
     } else {
       this.bossRush.update(
@@ -221,6 +236,7 @@ export class Simulation {
         this.player.x,
         this.player.y,
         this.state,
+        this.enemies,
       );
     }
 
@@ -243,11 +259,14 @@ export class Simulation {
 
     updateGraze(this.player, this.enemyBullets, this.state, this.grazeMargin);
     resolveShotsVsEnemies(this.playerShots, this.enemies, this.state);
-    const boss = this.boss;
-    if (boss) resolveShotsVsBoss(this.playerShots, boss);
+    const bossSys = this.activeBossSystem;
+    if (bossSys && bossSys.boss.alive) {
+      resolveShotsVsBossSystem(this.playerShots, bossSys, this.state);
+    }
     // Campanha: derrotar o chefe é VITÓRIA. Boss Rush: vitória ao vencer todos.
     // Endless: o BossDirector dá o bônus e a run continua (é infinito).
     if (this.mode === 'campaign' && this.bossSystem.boss.defeated && !this.state.won) {
+      this.bossSystem.cleanupAdds(this.enemies);
       this.state.addScore(this.bossSystem.defeatScore);
       this.state.win();
     } else if (this.mode === 'bossrush' && this.bossRush.completed && !this.state.won) {
@@ -265,8 +284,25 @@ export class Simulation {
     this.foldHash(this.enemies.activeCount);
     this.foldHash(this.state.score);
     this.foldHash(this.state.lives);
-    this.foldHash(boss && boss.alive ? boss.hp : -1);
+    const hashBoss = this.boss;
+    this.foldHash(hashBoss && hashBoss.alive ? hashBoss.hp : -1);
     this.foldHash(input.focus ? 1 : 0);
+    // Estado das mecânicas do chefe (P4-02b) no checksum: escudo, partes e
+    // ciclo de teleporte — sem isso o anti-cheat/replay não cobriria a luta.
+    if (bossSys && bossSys.boss.alive) {
+      this.foldHash(bossSys.shieldActive ? bossSys.shieldHp : -1);
+      let partsAlive = 0;
+      let partsHpSum = 0;
+      for (const p of bossSys.parts) {
+        if (p.alive) partsAlive++;
+        partsHpSum += p.hp;
+      }
+      this.foldHash(partsAlive);
+      this.foldHash(partsHpSum);
+      this.foldHash(bossSys.telegraphActive ? 1 : 0);
+      this.foldHash(Math.round(bossSys.boss.x) | 0);
+      this.foldHash(Math.round(bossSys.boss.y) | 0);
+    }
 
     this._tickCount++;
   }

@@ -6,6 +6,15 @@
   "homeY": 260,
   "sweepAmplitudePx": 220,
   "sweepPeriodTicks": 260,
-  "phasePatternIds": ["ring", "aimed"],
-  "defeatScore": 5000
+  "defeatScore": 5000,
+  "shape": "hex",
+  "color": "#ff5d8f",
+  "phases": [
+    { "patternId": "ring", "untilHpPct": 0.5 },
+    {
+      "patternId": "aimed",
+      "untilHpPct": 0,
+      "shield": { "hp": 30, "rechargeTicks": 360 }
+    }
+  ]
 }
