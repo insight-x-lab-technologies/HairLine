@@ -1,0 +1,16 @@
+{
+  "id": "accel-ring",
+  "emitters": [
+    {
+      "type": "ring",
+      "count": 18,
+      "speed": 40,
+      "bulletRadius": 6,
+      "startTick": 25,
+      "intervalTicks": 60,
+      "repeat": 8,
+      "angleDeg": 0,
+      "accel": 240
+    }
+  ]
+}

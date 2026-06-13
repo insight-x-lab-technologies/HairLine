@@ -1,0 +1,16 @@
+{
+  "id": "wall",
+  "emitters": [
+    {
+      "type": "fan",
+      "count": 9,
+      "speed": 160,
+      "bulletRadius": 6,
+      "startTick": 25,
+      "intervalTicks": 55,
+      "repeat": 10,
+      "angleDeg": 0,
+      "spreadDeg": 120
+    }
+  ]
+}

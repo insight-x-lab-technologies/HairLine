@@ -1,0 +1,7 @@
+# Configuração do Cloudflare Pages (deploy do PWA estático).
+# O build do Vite sai em ./dist; o Pages serve esse diretório.
+# Deploy real depende de conta/projeto Cloudflare + secrets na CI (ver
+# docs/deploy-cloudflare.md). Nada é disparado automaticamente até isso existir.
+name = "hairline"
+compatibility_date = "2026-06-06"
+pages_build_output_dir = "dist"

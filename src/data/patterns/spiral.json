@@ -1,0 +1,16 @@
+{
+  "id": "spiral",
+  "emitters": [
+    {
+      "type": "ring",
+      "count": 3,
+      "speed": 150,
+      "bulletRadius": 6,
+      "startTick": 20,
+      "intervalTicks": 5,
+      "repeat": 70,
+      "angleDeg": 0,
+      "angleStepDeg": 11
+    }
+  ]
+}

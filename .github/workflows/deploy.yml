@@ -1,0 +1,54 @@
+# Deploy → Cloudflare Pages (docs/03 §6, docs/deploy-cloudflare.md).
+#
+# PRÉ-REQUISITOS (ainda não configurados — conta Cloudflare será criada depois):
+#   - Projeto Pages chamado "hairline" (ver wrangler.toml).
+#   - Secrets no repositório GitHub:
+#       CLOUDFLARE_API_TOKEN   (permissão "Cloudflare Pages: Edit")
+#       CLOUDFLARE_ACCOUNT_ID
+#
+# Enquanto os secrets não existirem, este workflow simplesmente não roda de
+# forma útil — ele NÃO é disparado por nós aqui (sem push). Está pronto para
+# quando a conta existir.
+name: Deploy (Cloudflare Pages)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: build · publish
+    runs-on: ubuntu-latest
+    # Evita falhar em forks/sem secrets: só roda se o token estiver presente.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (clean)
+        run: npm ci
+
+      - name: Build (produção + PWA)
+        run: npm run build
+
+      - name: Publish to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=hairline --branch=main

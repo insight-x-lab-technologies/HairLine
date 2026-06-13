@@ -1,0 +1,9 @@
+{
+  "id": "bomber",
+  "hp": 8,
+  "radiusPx": 24,
+  "speedYPxPerSec": 40,
+  "patternId": "wall",
+  "shape": "hex",
+  "color": "#ff3b3b"
+}

@@ -1,0 +1,11 @@
+{
+  "id": "warden",
+  "hp": 120,
+  "radiusPx": 46,
+  "enterTick": 480,
+  "homeY": 260,
+  "sweepAmplitudePx": 220,
+  "sweepPeriodTicks": 260,
+  "phasePatternIds": ["ring", "aimed"],
+  "defeatScore": 5000
+}

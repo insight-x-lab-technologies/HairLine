@@ -1,0 +1,12 @@
+{
+  "lives": 3,
+  "invulnTicks": 90,
+  "focusMax": 100,
+  "focusPerGraze": 4,
+  "grazeMarginPx": 22,
+  "scorePerKill": 100,
+  "scorePerGraze": 10,
+  "pulseCost": 100,
+  "pulseRadiusPx": 300,
+  "scorePerReflected": 20
+}

@@ -1,0 +1,9 @@
+{
+  "id": "lancer",
+  "hp": 5,
+  "radiusPx": 18,
+  "speedYPxPerSec": 75,
+  "patternId": "layered-fan",
+  "shape": "diamond",
+  "color": "#6bd5ff"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "spiral-aimed",
+  "emitters": [
+    {
+      "type": "aimed",
+      "count": 2,
+      "speed": 200,
+      "bulletRadius": 6,
+      "startTick": 20,
+      "intervalTicks": 6,
+      "repeat": 60,
+      "spreadDeg": 16,
+      "angleStepDeg": 17
+    }
+  ]
+}

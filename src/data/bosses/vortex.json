@@ -1,0 +1,11 @@
+{
+  "id": "vortex",
+  "hp": 160,
+  "radiusPx": 50,
+  "enterTick": 480,
+  "homeY": 250,
+  "sweepAmplitudePx": 200,
+  "sweepPeriodTicks": 280,
+  "phasePatternIds": ["spiral-aimed", "cross"],
+  "defeatScore": 7000
+}

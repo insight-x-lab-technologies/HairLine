@@ -1,0 +1,15 @@
+# Cabeçalhos do Cloudflare Pages (https://developers.cloudflare.com/pages/configuration/headers/).
+# Assets do Vite têm hash no nome → cache imutável e longo.
+# index.html e service worker NÃO podem ficar presos em cache (atualização do PWA).
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/sw.js
+  Cache-Control: no-cache
+
+/index.html
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: no-cache

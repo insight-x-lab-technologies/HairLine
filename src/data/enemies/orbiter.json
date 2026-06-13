@@ -1,0 +1,9 @@
+{
+  "id": "orbiter",
+  "hp": 6,
+  "radiusPx": 20,
+  "speedYPxPerSec": 55,
+  "patternId": "accel-ring",
+  "shape": "hex",
+  "color": "#c66bff"
+}

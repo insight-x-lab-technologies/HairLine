@@ -1,0 +1,24 @@
+{
+  "rampTicks": 1800,
+  "baseSpawnIntervalTicks": 115,
+  "minSpawnIntervalTicks": 24,
+  "spawnIntervalDecayPerLevel": 6,
+  "enemySpeedMulPerLevel": 0.05,
+  "enemyHpBonusPerLevel": 1,
+  "bossFirstLevel": 3,
+  "bossEveryLevels": 4,
+  "formationFromLevel": 2,
+  "formationChance": 0.35,
+  "formationSizeMin": 3,
+  "formationSizeMax": 5,
+  "formationSpacingPx": 64,
+  "tiers": [
+    { "unlockLevel": 0, "enemyIds": ["drone"] },
+    { "unlockLevel": 2, "enemyIds": ["sniper"] },
+    { "unlockLevel": 3, "enemyIds": ["lancer"] },
+    { "unlockLevel": 4, "enemyIds": ["weaver"] },
+    { "unlockLevel": 5, "enemyIds": ["turret"] },
+    { "unlockLevel": 6, "enemyIds": ["orbiter"] },
+    { "unlockLevel": 8, "enemyIds": ["bomber"] }
+  ]
+}

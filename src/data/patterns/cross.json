@@ -1,0 +1,27 @@
+{
+  "id": "cross",
+  "emitters": [
+    {
+      "type": "ring",
+      "count": 4,
+      "speed": 170,
+      "bulletRadius": 6,
+      "startTick": 20,
+      "intervalTicks": 8,
+      "repeat": 40,
+      "angleDeg": 0,
+      "angleStepDeg": 6
+    },
+    {
+      "type": "ring",
+      "count": 4,
+      "speed": 120,
+      "bulletRadius": 6,
+      "startTick": 24,
+      "intervalTicks": 8,
+      "repeat": 40,
+      "angleDeg": 45,
+      "angleStepDeg": -6
+    }
+  ]
+}

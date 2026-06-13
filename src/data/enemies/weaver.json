@@ -1,0 +1,9 @@
+{
+  "id": "weaver",
+  "hp": 4,
+  "radiusPx": 18,
+  "speedYPxPerSec": 80,
+  "patternId": "spiral",
+  "shape": "triangle",
+  "color": "#3df5a5"
+}

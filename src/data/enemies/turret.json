@@ -1,0 +1,9 @@
+{
+  "id": "turret",
+  "hp": 7,
+  "radiusPx": 22,
+  "speedYPxPerSec": 45,
+  "patternId": "ring",
+  "shape": "hex",
+  "color": "#9d6bff"
+}

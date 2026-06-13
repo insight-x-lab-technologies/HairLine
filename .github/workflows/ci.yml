@@ -1,0 +1,47 @@
+# CI — lint → format → typecheck → test → build (docs/03 §6).
+# Em cada push/PR, o pipeline precisa ficar VERDE; PR não mergeia se algo falha.
+# Deploy é um job separado (decisão de plataforma ainda em aberto, docs/03 §6).
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Cancela execuções antigas do mesmo ref para economizar minutos de runner.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: lint · typecheck · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install (clean)
+        run: npm ci
+
+      - name: Lint (ESLint — barra Math.random na lógica, docs/02 §3.2)
+        run: npm run lint
+
+      - name: Format check (Prettier)
+        run: npm run format:check
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Test (Vitest headless — inclui determinismo, docs/03 §5.2)
+        run: npm test
+
+      - name: Build (produção + PWA)
+        run: npm run build

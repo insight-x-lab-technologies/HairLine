@@ -1,0 +1,11 @@
+{
+  // Worker do ranking diário do HAIRLINE (NÃO implantado ainda).
+  // Deploy: cd worker && npx wrangler deploy  (após criar o KV namespace).
+  "name": "hairline-leaderboard",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-07",
+  // Crie o namespace e cole o id:
+  //   npx wrangler kv namespace create LEADERBOARD
+  "kv_namespaces": [{ "binding": "LEADERBOARD", "id": "<preencher-apos-criar>" }],
+  "observability": { "enabled": true },
+}

@@ -1,0 +1,11 @@
+{
+  "id": "gunner",
+  "hp": 130,
+  "radiusPx": 44,
+  "enterTick": 480,
+  "homeY": 240,
+  "sweepAmplitudePx": 240,
+  "sweepPeriodTicks": 220,
+  "phasePatternIds": ["wall", "aimed"],
+  "defeatScore": 5500
+}

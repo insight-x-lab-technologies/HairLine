@@ -1,0 +1,16 @@
+{
+  "id": "fan",
+  "emitters": [
+    {
+      "type": "fan",
+      "count": 5,
+      "speed": 210,
+      "bulletRadius": 6,
+      "startTick": 20,
+      "intervalTicks": 36,
+      "repeat": 10,
+      "angleDeg": 0,
+      "spreadDeg": 52
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "layered-fan",
+  "emitters": [
+    {
+      "type": "fan",
+      "count": 4,
+      "speed": 130,
+      "bulletRadius": 5,
+      "startTick": 20,
+      "intervalTicks": 34,
+      "repeat": 12,
+      "angleDeg": 0,
+      "spreadDeg": 40,
+      "speedStep": 45
+    }
+  ]
+}

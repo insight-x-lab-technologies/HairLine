@@ -1,0 +1,15 @@
+{
+  "id": "ring",
+  "emitters": [
+    {
+      "type": "ring",
+      "count": 14,
+      "speed": 150,
+      "bulletRadius": 6,
+      "startTick": 30,
+      "intervalTicks": 50,
+      "repeat": 8,
+      "angleDeg": 0
+    }
+  ]
+}

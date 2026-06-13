@@ -1,0 +1,11 @@
+{
+  "id": "spinner",
+  "hp": 150,
+  "radiusPx": 50,
+  "enterTick": 480,
+  "homeY": 250,
+  "sweepAmplitudePx": 180,
+  "sweepPeriodTicks": 300,
+  "phasePatternIds": ["spiral", "ring"],
+  "defeatScore": 6000
+}

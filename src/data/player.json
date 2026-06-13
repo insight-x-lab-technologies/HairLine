@@ -1,0 +1,13 @@
+{
+  "maxSpeedPxPerSec": 2200,
+  "focusSpeedFactor": 0.45,
+  "hitboxRadiusPx": 5,
+  "marginPx": 26,
+  "startXPx": 360,
+  "startYPx": 1020,
+  "autoFire": {
+    "intervalTicks": 6,
+    "speedPxPerSec": 1300,
+    "radiusPx": 4
+  }
+}

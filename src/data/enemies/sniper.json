@@ -1,0 +1,9 @@
+{
+  "id": "sniper",
+  "hp": 4,
+  "radiusPx": 18,
+  "speedYPxPerSec": 70,
+  "patternId": "aimed",
+  "shape": "diamond",
+  "color": "#ffa53d"
+}

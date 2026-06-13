@@ -1,0 +1,10 @@
+{
+  "id": "wave-001",
+  "entries": [
+    { "tick": 30, "enemyId": "drone", "x": 220, "y": -30 },
+    { "tick": 30, "enemyId": "drone", "x": 500, "y": -30 },
+    { "tick": 150, "enemyId": "turret", "x": 360, "y": -30 },
+    { "tick": 300, "enemyId": "sniper", "x": 160, "y": -30 },
+    { "tick": 300, "enemyId": "sniper", "x": 560, "y": -30 }
+  ]
+}

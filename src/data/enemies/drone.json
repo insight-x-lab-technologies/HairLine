@@ -1,0 +1,9 @@
+{
+  "id": "drone",
+  "hp": 3,
+  "radiusPx": 18,
+  "speedYPxPerSec": 90,
+  "patternId": "fan",
+  "shape": "triangle",
+  "color": "#ff5d8f"
+}

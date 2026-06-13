@@ -1,0 +1,15 @@
+{
+  "id": "aimed",
+  "emitters": [
+    {
+      "type": "aimed",
+      "count": 3,
+      "speed": 270,
+      "bulletRadius": 6,
+      "startTick": 25,
+      "intervalTicks": 30,
+      "repeat": 12,
+      "spreadDeg": 18
+    }
+  ]
+}
