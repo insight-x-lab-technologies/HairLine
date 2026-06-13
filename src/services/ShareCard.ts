@@ -4,7 +4,9 @@
  * emojis, fácil de colar em qualquer lugar.
  */
 export interface ShareData {
-  readonly mode: 'daily' | 'endless' | 'campaign' | 'bossrush';
+  readonly mode: 'daily' | 'endless' | 'stage' | 'bossrush';
+  /** Rótulo do estágio para o modo `stage` (ex.: "Estágio 2"). */
+  readonly stageLabel?: string;
   readonly dayKey?: string;
   readonly score: number;
   readonly graze: number;
@@ -15,7 +17,7 @@ export interface ShareData {
 const MODE_LABEL: Record<ShareData['mode'], string> = {
   daily: 'Diário',
   endless: 'Endless',
-  campaign: 'Campanha',
+  stage: 'Estágio',
   bossrush: 'Boss Rush',
 };
 
@@ -26,7 +28,9 @@ function levelBar(level: number): string {
 }
 
 export function shareCard(d: ShareData): string {
-  const head = `HAIRLINE · ${MODE_LABEL[d.mode]}${d.dayKey ? ` ${d.dayKey}` : ''}`;
+  // No modo estágio, o rótulo do estágio (ex.: "Estágio 2") substitui "Estágio".
+  const label = d.mode === 'stage' && d.stageLabel ? d.stageLabel : MODE_LABEL[d.mode];
+  const head = `HAIRLINE · ${label}${d.dayKey ? ` ${d.dayKey}` : ''}`;
   const status = d.won ? '🏆 Vitória!' : '';
   const line = `✦ ${d.score} pts · graze ${d.graze} · nível ${d.level}`;
   return [head, status, line, levelBar(d.level)].filter((s) => s.length > 0).join('\n');

@@ -4,13 +4,16 @@ import {
   getEnemyDef,
   getBoss,
   getWave,
+  getStage,
   validateBossDef,
+  validateStageDef,
   PATTERN_IDS,
   ENEMY_IDS,
   BOSS_IDS,
   WAVE_IDS,
+  STAGE_IDS,
 } from '../src/content';
-import type { BossDef } from '../src/content/types';
+import type { BossDef, StageDef } from '../src/content/types';
 
 describe('content — integridade dos dados (docs/02 §3.2)', () => {
   it('todo padrão registrado resolve e tem ao menos um emitter', () => {
@@ -112,5 +115,33 @@ describe('content — integridade dos dados (docs/02 §3.2)', () => {
     expect(ENEMY_IDS).toContain('bomber');
     expect(PATTERN_IDS).toContain('spiral');
     expect(PATTERN_IDS).toContain('wall');
+  });
+
+  it('todo estágio registrado tem seções válidas (ondas/chefes existentes)', () => {
+    expect(STAGE_IDS.length).toBeGreaterThanOrEqual(3); // P4-04b-03
+    for (const id of STAGE_IDS) {
+      const stage = getStage(id);
+      expect(() => validateStageDef(stage)).not.toThrow();
+      expect(stage.sections.length).toBeGreaterThanOrEqual(1);
+      for (const s of stage.sections) {
+        if (s.type === 'wave') expect(() => getWave(s.waveId)).not.toThrow();
+        else expect(() => getBoss(s.bossId)).not.toThrow();
+      }
+    }
+  });
+
+  it('estágio inválido falha na validação (onda inexistente, seções vazias) — P4-04b-01', () => {
+    const base = getStage('stage-001');
+    const bad = (sections: StageDef['sections']): StageDef => ({ ...base, sections });
+    // Seções vazias.
+    expect(() => validateStageDef(bad([]))).toThrow();
+    // Onda inexistente.
+    expect(() => validateStageDef(bad([{ type: 'wave', waveId: 'wave-999' }]))).toThrow();
+    // Chefe inexistente.
+    expect(() => validateStageDef(bad([{ type: 'boss', bossId: 'ninguem' }]))).toThrow();
+  });
+
+  it('a ordem de STAGE_IDS é o contrato de desbloqueio (stage-001 primeiro) — P4-04b-04', () => {
+    expect(STAGE_IDS[0]).toBe('stage-001');
   });
 });

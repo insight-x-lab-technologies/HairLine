@@ -145,6 +145,10 @@ class AudioService {
         // Aviso de teleporte: bipe agudo ascendente.
         this.blip(620, 0.14, 'sine', 0.3, 320);
         break;
+      case 'bossentry':
+        // Entrada do chefe de estágio: sting grave/decidido (anuncia o perigo).
+        this.sweep(160, 320, 0.5, 0.45);
+        break;
     }
   }
 

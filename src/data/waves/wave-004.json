@@ -1,0 +1,14 @@
+{
+  "id": "wave-004",
+  "entries": [
+    { "tick": 20, "enemyId": "turret", "x": 140, "y": -30 },
+    { "tick": 20, "enemyId": "turret", "x": 290, "y": -30 },
+    { "tick": 20, "enemyId": "turret", "x": 440, "y": -30 },
+    { "tick": 20, "enemyId": "turret", "x": 590, "y": -30 },
+    { "tick": 160, "enemyId": "lancer", "x": 200, "y": -30 },
+    { "tick": 160, "enemyId": "lancer", "x": 520, "y": -30 },
+    { "tick": 280, "enemyId": "sniper", "x": 120, "y": -30 },
+    { "tick": 280, "enemyId": "sniper", "x": 360, "y": -30 },
+    { "tick": 280, "enemyId": "sniper", "x": 600, "y": -30 }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "stage-003",
+  "name": "Fogo Cruzado",
+  "sections": [
+    { "type": "wave", "waveId": "wave-004" },
+    { "type": "wave", "waveId": "wave-005" },
+    { "type": "boss", "bossId": "gunner" }
+  ]
+}

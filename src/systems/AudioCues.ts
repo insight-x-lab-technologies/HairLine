@@ -16,7 +16,9 @@ export type AudioCue =
   | 'gameover'
   | 'victory'
   | 'bossshield'
-  | 'bossteleport';
+  | 'bossteleport'
+  /** Entrada do chefe de estágio (P4-04b-02) — disparado pela cena, não por diff. */
+  | 'bossentry';
 
 export interface AudioSnapshot {
   readonly score: number;

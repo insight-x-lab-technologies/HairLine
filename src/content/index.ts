@@ -1,4 +1,4 @@
-import type { Pattern, EnemyDef, Wave, BossDef } from './types';
+import type { Pattern, EnemyDef, Wave, BossDef, StageDef } from './types';
 
 import ring from '../data/patterns/ring.json';
 import fan from '../data/patterns/fan.json';
@@ -19,12 +19,20 @@ import lancer from '../data/enemies/lancer.json';
 import orbiter from '../data/enemies/orbiter.json';
 
 import wave001 from '../data/waves/wave-001.json';
+import wave002 from '../data/waves/wave-002.json';
+import wave003 from '../data/waves/wave-003.json';
+import wave004 from '../data/waves/wave-004.json';
+import wave005 from '../data/waves/wave-005.json';
 
 import warden from '../data/bosses/warden.json';
 import spinner from '../data/bosses/spinner.json';
 import gunner from '../data/bosses/gunner.json';
 import vortex from '../data/bosses/vortex.json';
 import colossus from '../data/bosses/colossus.json';
+
+import stage001 from '../data/stages/stage-001.json';
+import stage002 from '../data/stages/stage-002.json';
+import stage003 from '../data/stages/stage-003.json';
 
 /**
  * Content — registro central do conteúdo dirigido por dados (docs/02 §3.2).
@@ -60,7 +68,13 @@ const enemies = index<EnemyDef>([
   lancer,
   orbiter,
 ] as unknown as EnemyDef[]);
-const waves = index<Wave>([wave001] as unknown as Wave[]);
+const waves = index<Wave>([
+  wave001,
+  wave002,
+  wave003,
+  wave004,
+  wave005,
+] as unknown as Wave[]);
 const bosses = index<BossDef>([
   warden,
   spinner,
@@ -68,6 +82,9 @@ const bosses = index<BossDef>([
   vortex,
   colossus,
 ] as unknown as BossDef[]);
+// Ordem do array = ordem de desbloqueio dos estágios (P4-04b-04). É contrato:
+// ids nunca mudam de posição relativa após lançados.
+const stages = index<StageDef>([stage001, stage002, stage003] as unknown as StageDef[]);
 
 /**
  * Valida o schema de fases de um chefe (P4-02b-01): ≥2 fases, padrões/inimigos
@@ -130,14 +147,42 @@ export function validateBossDef(def: BossDef): void {
   });
 }
 
+/**
+ * Valida um estágio curado (P4-04b-01): ≥1 seção; cada seção referencia uma
+ * onda/chefe existente e tem `type` válido. Lança em caso de erro — roda no
+ * carregamento (abaixo) e é exercitada pelos testes de conteúdo.
+ */
+export function validateStageDef(def: StageDef): void {
+  const where = `estágio "${def.id}"`;
+  if (!Array.isArray(def.sections) || def.sections.length < 1) {
+    throw new Error(`${where}: precisa de ao menos 1 seção`);
+  }
+  def.sections.forEach((s, i) => {
+    if (s.type === 'wave') {
+      if (!waves.has(s.waveId)) {
+        throw new Error(`${where}, seção ${i}: onda inexistente "${s.waveId}"`);
+      }
+    } else if (s.type === 'boss') {
+      if (!bosses.has(s.bossId)) {
+        throw new Error(`${where}, seção ${i}: chefe inexistente "${s.bossId}"`);
+      }
+    } else {
+      throw new Error(`${where}, seção ${i}: tipo de seção inválido`);
+    }
+  });
+}
+
 // Validação de integridade no carregamento (falha cedo em dados quebrados).
 for (const def of bosses.values()) validateBossDef(def);
+for (const def of stages.values()) validateStageDef(def);
 
 /** Ids registrados (para varreduras de integridade e seleção de conteúdo). */
 export const PATTERN_IDS: readonly string[] = [...patterns.keys()];
 export const ENEMY_IDS: readonly string[] = [...enemies.keys()];
 export const WAVE_IDS: readonly string[] = [...waves.keys()];
 export const BOSS_IDS: readonly string[] = [...bosses.keys()];
+/** Ids dos estágios na ordem de registro = ordem de desbloqueio (P4-04b-04). */
+export const STAGE_IDS: readonly string[] = [...stages.keys()];
 
 export function getPattern(id: string): Pattern {
   const p = patterns.get(id);
@@ -161,4 +206,10 @@ export function getBoss(id: string): BossDef {
   const b = bosses.get(id);
   if (!b) throw new Error(`Chefe desconhecido: ${id}`);
   return b;
+}
+
+export function getStage(id: string): StageDef {
+  const s = stages.get(id);
+  if (!s) throw new Error(`Estágio desconhecido: ${id}`);
+  return s;
 }

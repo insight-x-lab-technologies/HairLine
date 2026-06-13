@@ -89,8 +89,30 @@ Atuais: warden (escudo), spinner (teleporte), gunner (adds), vortex (partes) e
 
 ## Modos
 
-- `endless` (padrão), `campaign` (onda autoral + chefe que entra por tick),
-  `bossrush` (chefes em sequência → vitória ao vencer todos).
+- `endless` (padrão), `stage` (estágio curado), `bossrush` (chefes em sequência
+  → vitória ao vencer todos).
+
+### Estágios curados (`stage`) — `src/data/stages/*.json` (P4-04b)
+
+Um **estágio** é uma sequência autoral declarada em JSON:
+`{ id, name, sections: StageSection[] }`, onde cada seção é
+`{ type: 'wave', waveId }` ou `{ type: 'boss', bossId }` (ordem do array = ordem
+de execução). O `StageDirector` (headless) executa as seções: uma de onda
+termina quando a onda spawnou tudo **e** não há inimigo vivo; uma de chefe, ao
+derrotá-lo (some o `defeatScore`). O **chefe entra por limpeza de seção**, não
+por `enterTick`. Concluir a última seção = vitória. Substitui o antigo
+`campaign` (sem suporte duplo — o jogo não lançou).
+
+- **Progresso (P4-04b-02):** a sim expõe `stageProgress`
+  (`{ section, total, kind, stageName }`, 1-based; `null` fora de `stage`). O
+  render anuncia "ONDA n/m"/"CHEFE" na troca de seção e mantém um indicador
+  "n/m" no HUD — tudo na cena, nada vaza para a sim (hash inalterado).
+- **Curva (P4-04b-03):** `stage-001` é o tutorial (densidade baixa); a rampa
+  fica **entre** estágios, não dentro do primeiro. Balanceamento só em JSON.
+- **Seletor + desbloqueio (P4-04b-04):** o Menu lista os estágios; o primeiro
+  está sempre aberto e vencer o N destrava o N+1 (ordem de `STAGE_IDS` é
+  contrato). Recordes locais por estágio via `SaveService` (meta-jogo, fora da
+  sim).
 
 ## Modificadores (Evento Semanal) — `src/systems/Modifiers.ts`
 

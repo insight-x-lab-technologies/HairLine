@@ -57,6 +57,21 @@ describe('Replay — gravação + verificação por re-simulação (docs/02 §7)
     expect(verifyReplay(replay)).toEqual(verifyReplay(replay));
   });
 
+  it('replay de estágio grava o stageId e re-simula com hash/score corretos (P4-04b-01)', () => {
+    const sim = new Simulation({ seed: 808, mode: 'stage', stageId: 'stage-002' });
+    const rec = new ReplayRecorder(808, 'stage', undefined, 'stage-002');
+    for (const inp of inputs) {
+      rec.record(inp);
+      sim.tick(inp);
+    }
+    const replay = rec.finalize(sim);
+    expect(replay.stageId).toBe('stage-002');
+    expect(verifyReplay(replay).ok).toBe(true);
+    // Sem o stageId (ou com outro), a re-simulação parte do stage-001 e NÃO bate.
+    const { stageId: _omit, ...noStage } = replay;
+    expect(verifyReplay(noStage).ok).toBe(false);
+  });
+
   it('replay com mods (evento semanal) verifica corretamente', () => {
     const mods = { scorePerGrazeMul: 2, livesOverride: 1 };
     const sim = new Simulation({ seed: 321, mode: 'endless', mods });

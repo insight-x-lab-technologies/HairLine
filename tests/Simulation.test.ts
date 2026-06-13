@@ -57,8 +57,11 @@ describe('Simulation — headless e determinística (docs/02 §3.1, docs/03 §5.
   });
 
   it('roda uma onda completa de forma determinística (estado e hash batem)', () => {
+    // Migrado de mode:'campaign'/waveId para o modo 'stage' (P4-04b-01): o
+    // estágio padrão (stage-001) inicia na 1ª seção de onda; em ~6 s o combate
+    // ainda está na fase de ondas, exercitando o spawn por seção.
     const play = (): { hash: string; score: number; graze: number; enemyBullets: number } => {
-      const sim = new Simulation({ seed: 0xc0ffee, mode: 'campaign', waveId: 'wave-001' });
+      const sim = new Simulation({ seed: 0xc0ffee, mode: 'stage' });
       // Fica parado num canto, deixando o combate evoluir por ~6 s.
       const input = { moveX: 360, moveY: 1100, focus: false };
       for (let i = 0; i < 360; i++) sim.tick(input);
@@ -135,25 +138,36 @@ describe('Simulation — headless e determinística (docs/02 §3.1, docs/03 §5.
     expect(play()).toBe(play()); // mesma seed → mesmo estado
   });
 
-  it('o chefe entra no tick configurado e começa na fase 1', () => {
-    const sim = new Simulation({ seed: 1, mode: 'campaign' });
-    const input = { moveX: 360, moveY: 1100, focus: false };
-    expect(sim.bossSystem.boss.alive).toBe(false);
-    for (let i = 0; i <= 480; i++) sim.tick(input);
-    expect(sim.bossSystem.boss.alive).toBe(true);
-    expect(sim.bossSystem.boss.phaseIndex).toBe(0);
+  it('modo stage começa na 1ª seção (onda) e expõe o progresso; é null fora dele', () => {
+    // Migrado dos antigos testes de 'campaign' (P4-04b-01/02): o chefe entra
+    // por limpeza de seção, não por enterTick; a sim expõe stageProgress.
+    const sim = new Simulation({ seed: 1, mode: 'stage' });
+    expect(sim.boss).toBeNull(); // ainda na fase de ondas
+    expect(sim.stageProgress).toEqual({
+      section: 1,
+      total: 3,
+      kind: 'wave',
+      stageName: 'Primeiro Corte',
+    });
+    expect(new Simulation({ seed: 1 }).stageProgress).toBeNull(); // endless
   });
 
-  it('derrotar o chefe encerra a run em vitória e pontua', () => {
-    const sim = new Simulation({ seed: 1, mode: 'campaign' });
+  it('concluir todas as seções do estágio encerra a run em vitória e pontua', () => {
+    // livesOverride alto: o objetivo é provar a transição de seções até a
+    // vitória, não a sobrevivência (a nave fica parada e levaria dano de chip
+    // ao longo das ondas longas). É determinístico (mods entram no estado).
+    const sim = new Simulation({ seed: 1, mode: 'stage', mods: { livesOverride: 99 } });
     const input = { moveX: 360, moveY: 1100, focus: false };
-    for (let i = 0; i <= 480; i++) sim.tick(input);
-    // Aplica dano direto no chefe (atalho de teste) até derrotar.
-    while (sim.bossSystem.boss.alive) sim.bossSystem.boss.onHit(10);
-    sim.tick(input); // tick que detecta a derrota
+    // As ondas se esvaziam sozinhas (inimigos saem pela base); ao surgir o
+    // chefe, aplica dano direto (atalho de teste) para derrotá-lo.
+    for (let i = 0; i < 8000 && !sim.state.gameOver; i++) {
+      const b = sim.boss;
+      if (b && b.alive) b.onHit(999);
+      sim.tick(input);
+    }
     expect(sim.state.won).toBe(true);
     expect(sim.state.gameOver).toBe(true);
-    expect(sim.state.score).toBeGreaterThanOrEqual(5000);
+    expect(sim.state.score).toBeGreaterThanOrEqual(5000); // defeatScore do warden
   });
 
   it('o movimento da nave dentro da sim é determinístico para os mesmos inputs', () => {

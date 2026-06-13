@@ -1,0 +1,16 @@
+{
+  "id": "wave-003",
+  "entries": [
+    { "tick": 20, "enemyId": "drone", "x": 160, "y": -30 },
+    { "tick": 20, "enemyId": "drone", "x": 360, "y": -30 },
+    { "tick": 20, "enemyId": "drone", "x": 560, "y": -30 },
+    { "tick": 70, "enemyId": "drone", "x": 160, "y": -30 },
+    { "tick": 70, "enemyId": "drone", "x": 360, "y": -30 },
+    { "tick": 70, "enemyId": "drone", "x": 560, "y": -30 },
+    { "tick": 120, "enemyId": "drone", "x": 160, "y": -30 },
+    { "tick": 120, "enemyId": "drone", "x": 360, "y": -30 },
+    { "tick": 120, "enemyId": "drone", "x": 560, "y": -30 },
+    { "tick": 220, "enemyId": "orbiter", "x": 240, "y": -30 },
+    { "tick": 220, "enemyId": "orbiter", "x": 480, "y": -30 }
+  ]
+}

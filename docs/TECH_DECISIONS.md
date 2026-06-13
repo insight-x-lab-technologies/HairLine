@@ -90,6 +90,31 @@ o jogo não lançou). Cada fase declara `patternId` + `untilHpPct` e, opcionalme
 - **Hash**: escudo (HP), partes (vivas/soma de HP) e ciclo de teleporte
   (telegraph + posição) entram no checksum — replay/anti-cheat cobrem a luta.
 
+## TD-18 — Estágios curados data-driven + modo `stage` (P4-04b) ✅
+`StageDef { id, name, sections: StageSection[] }` em `src/data/stages/*.json`;
+seção = `{type:'wave',waveId}` | `{type:'boss',bossId}`. Decisões fechadas:
+- **Modo `campaign` removido** (sem suporte duplo — o jogo não lançou): `stage`
+  o absorve. `GameMode = 'endless' | 'stage' | 'bossrush'`; `waveId`/`bossId`
+  saem de `SimulationOptions` (eram só da campanha); entra `stageId` (default
+  `stage-001`), gravado no `Replay` e re-simulado por `verifyReplay`.
+- **Chefe entra por LIMPEZA de seção, não por `enterTick`** (mudança de
+  comportamento vs. campanha): a seção de onda fecha com spawner esgotado +
+  `enemies.activeCount === 0`; a de chefe, ao derrotá-lo (some `defeatScore`,
+  como o `BossRushDirector`). `BossDef.enterTick` segue no schema (Endless usa).
+- **`StageDirector` espelha as fases do tick** (spawn → chefe → fim), com 3
+  métodos chamados em pontos fixos da `Simulation`, preservando a ordem
+  determinística. O índice da seção entra no `hashState()` (replay/anti-cheat
+  cobrem o avanço onda→onda→chefe). Como é modo novo, fixtures golden de
+  campanha foram migradas para `stage` com hashes novos (mudança especificada
+  em P4-04b-01; CLAUDE.md §"não consertar teste para acomodar bug" não se
+  aplica — é comportamento novo, citado no commit).
+- **Progresso é só estado exposto** (`stageProgress`, somente-leitura); anúncios
+  e indicador "n/m" ficam na `GameScene` (nada vaza para a sim — hash inalterado).
+- **Save de progresso versionado**: bloco `hairline.stageProgress.v1` no
+  `SaveService` (`{ [stageId]: { completed, bestScore } }`). Desbloqueio segue a
+  ordem de `STAGE_IDS` (contrato: ids nunca mudam de posição relativa). Save
+  antigo sem o bloco ⇒ só o primeiro estágio aberto.
+
 ## Decisões em aberto (revisitar quando necessário)
 - Formato compacto de replay (bitpacking de inputs) — hoje é array por tick.
 - Atlas único de sprites vs `Graphics` — só se a performance exigir (Fase 5).

@@ -15,7 +15,7 @@ describe('ShareImage — nome do arquivo de compartilhamento (Fase 3)', () => {
   });
 
   it('é determinístico e seguro (sem espaços/caracteres estranhos)', () => {
-    const f = shareFilename({ mode: 'campaign', score: 12345, graze: 7, level: 3 });
+    const f = shareFilename({ mode: 'stage', score: 12345, graze: 7, level: 3 });
     expect(f).toMatch(/^[a-z0-9.-]+$/);
   });
 });

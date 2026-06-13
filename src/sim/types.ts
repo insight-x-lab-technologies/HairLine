@@ -20,7 +20,7 @@ export interface SimInput {
 export const NEUTRAL_INPUT: SimInput = { moveX: 0, moveY: 0, focus: false };
 
 /** Modos de jogo. */
-export type GameMode = 'endless' | 'campaign' | 'bossrush';
+export type GameMode = 'endless' | 'stage' | 'bossrush';
 
 /** Multiplicadores/overrides de regra (evento semanal). Plano e serializável. */
 export interface RunMods {
@@ -39,10 +39,8 @@ export interface SimulationOptions {
   readonly tickRateHz?: number;
   /** Dimensões do campo virtual. Padrão: resolução virtual de layout.ts. */
   readonly bounds?: { readonly w: number; readonly h: number };
-  /** Id da onda a executar. Padrão: onda inicial da fatia atual. */
-  readonly waveId?: string;
-  /** Id do chefe da run. Padrão: chefe inicial da fatia atual. */
-  readonly bossId?: string;
+  /** Id do estágio curado a executar (modo `stage`). Padrão: `stage-001`. */
+  readonly stageId?: string;
   /** Modo de jogo. Padrão: 'endless' (procedural com dificuldade crescente). */
   readonly mode?: GameMode;
   /** Modificadores de regra (evento semanal). Fazem parte do estado determinístico. */

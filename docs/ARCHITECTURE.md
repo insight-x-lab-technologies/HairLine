@@ -33,15 +33,19 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   - Bala/combate: `PatternSystem` (emitters→balas), `CollisionSystem`,
     `GrazeSystem`, `ReflectPulse`.
   - Chefes: `BossSystem`, `BossDirector` (Endless), `BossRushDirector`.
+  - Estágio: `StageDirector` (modo `stage`) — executa seções onda→chefe em
+    sequência; expõe `stageProgress` para o render (P4-04b).
   - Regras/eventos: `Modifiers` (semanal), `AudioCues` (estado→sons).
 - **`src/entities/`**: `BulletPool` (com aceleração), `EnemyPool` — **pools
   pré-alocados**, nunca `new` no loop.
 - **`src/services/`**: `Rng` (mulberry32), `InputService`, `SafeArea`,
   `AudioService` (Web Audio procedural), `SaveService` (recorde), `PlayerIdentity`,
   `DailySeed`, `ShareCard`, `ShareImage`, `LeaderboardService` (Local + Remote).
-- **`src/content/`**: `index.ts` (registro: getPattern/getEnemyDef/getBoss/getWave
-  + listas de ids) e `types.ts`. Único ponto de `cast` dos JSON.
-- **`src/data/`**: JSON de patterns/enemies/bosses/waves + difficulty/player/combat.
+- **`src/content/`**: `index.ts` (registro:
+  getPattern/getEnemyDef/getBoss/getWave/getStage + listas de ids, validação de
+  bosses/estágios no load) e `types.ts`. Único ponto de `cast` dos JSON.
+- **`src/data/`**: JSON de patterns/enemies/bosses/waves/**stages** +
+  difficulty/player/combat.
 - **`src/scenes/`** (Phaser): Boot, Preload, Menu, Game, Pause, Results.
 - **`src/ui/`**: `neonText`, `shapes` (polígonos), `hudLayout` (safe-areas).
 - **`src/config/`**: `layout` (virtual 720×1280, 60Hz), `gameConfig`, `sceneKeys`.
@@ -78,7 +82,8 @@ não-bloqueante. CI em `.github/workflows/`.
 
 ## Onde adicionar coisas (mapa rápido)
 
-- Novo padrão/inimigo/chefe → JSON em `src/data/` + registrar em `content/index.ts`.
+- Novo padrão/inimigo/chefe/onda/**estágio** → JSON em `src/data/` + registrar em
+  `content/index.ts`.
 - Nova mecânica de jogo → `src/systems/*` (puro) + plugar em `Simulation.tick`.
 - Novo efeito visual/som → `scenes/GameScene` ou `services/AudioService` (nunca na sim).
 - Novo modo → `GameMode` em `types.ts` + branch no tick + opção no Menu.

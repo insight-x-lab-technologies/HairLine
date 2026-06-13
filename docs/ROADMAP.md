@@ -20,8 +20,9 @@
 | 4 | Profundidade de conteúdo | 🟡 em andamento |
 | 5–9+ | Polimento → visão | ⬜ a fazer |
 
-Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 1 onda autoral**.
-Testes: **232 passando** (34 arquivos). Ver `TEST_STRATEGY.md`.
+Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 5 ondas
+autorais, 3 estágios curados**.
+Testes: **250 passando** (37 arquivos). Ver `TEST_STRATEGY.md`.
 
 ---
 
@@ -92,8 +93,8 @@ Testes: **232 passando** (34 arquivos). Ver `TEST_STRATEGY.md`.
    vortex=partes, **colossus**=3 fases compondo tudo). Concluído via **P4-02b**.
 - ✅ **P4-03** Variedade de inimigos (7) + **formações** (`Formations`:
    line/vee/column, dirigidas por dados no Endless).
-- 🟡 **P4-04** Modos: **boss rush** ✅ (`BossRushDirector`, mode `bossrush`).
-   **Falta**: **estágios curados** (sequência autoral onda→onda→chefe). → **P4-04b**.
+- ✅ **P4-04** Modos: **boss rush** ✅ (`BossRushDirector`, mode `bossrush`) +
+   **estágios curados** ✅ (sequência autoral onda→onda→chefe, mode `stage`). → **P4-04b**.
 - ✅ **P4-05** Eventos/modificadores semanais (`Modifiers`: seed ISO da semana,
    `RunMods` aplicados à Simulation e ao replay; opção "Evento Semanal" no Menu).
 - ⬜ **P4-06** **Ferramenta interna de autoria de padrões** (editor de bullet
@@ -105,9 +106,15 @@ Testes: **232 passando** (34 arquivos). Ver `TEST_STRATEGY.md`.
   fases data-driven, escudo, adds, partes destrutíveis, teleporte e o 5º chefe
   (colossus) compondo as mecânicas. Ver TD-17 e `tests/BossMechanics.test.ts` /
   `tests/BossColossus.test.ts`.
-- ⬜ **P4-04b** Estágios curados (formato de "stage" autoral + seletor de fases).
-  Especificado em 4 issues SDD: `docs/issues/P4-04b-*.md` (publicar com
-  `docs/issues/publish.sh`).
+- ✅ **P4-04b** Estágios curados (formato de "stage" autoral + seletor de fases).
+  4 issues SDD (`docs/issues/P4-04b-*.md`) implementadas: (01) `StageDef` +
+  `StageDirector`, modo `stage` substitui `campaign`, `stageId` no replay; (02)
+  `stageProgress` + anúncios "ONDA n/m"/"CHEFE" + indicador no HUD + sting de
+  chefe; (03) 5 ondas autorais + 3 estágios curados (warden/spinner/gunner,
+  curva fácil→difícil, `stage-001` tutorial); (04) seletor no Menu com
+  desbloqueio progressivo + recordes locais por estágio (`SaveService`). Ver
+  TD-18, `tests/StageDirector.test.ts`, `tests/stages.test.ts`,
+  `tests/stage-progress.test.ts`.
 
 ---
 

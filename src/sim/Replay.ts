@@ -19,6 +19,8 @@ export interface Replay {
   readonly score: number;
   /** Modificadores de regra aplicados (evento semanal), se houver. */
   readonly mods?: RunMods;
+  /** Id do estágio (modo `stage`) — necessário para re-simular (P4-04b-01). */
+  readonly stageId?: string;
 }
 
 export class ReplayRecorder {
@@ -28,6 +30,7 @@ export class ReplayRecorder {
     private readonly seed: number,
     private readonly mode: GameMode,
     private readonly mods?: RunMods,
+    private readonly stageId?: string,
   ) {}
 
   /** Registra o input de um tick (cópia normalizada). */
@@ -50,6 +53,7 @@ export class ReplayRecorder {
       finalHash: sim.hashState(),
       score: sim.state.score,
       ...(this.mods ? { mods: this.mods } : {}),
+      ...(this.stageId ? { stageId: this.stageId } : {}),
     };
   }
 }
@@ -66,6 +70,7 @@ export function verifyReplay(replay: Replay): VerifyResult {
     seed: replay.seed,
     mode: replay.mode,
     ...(replay.mods ? { mods: replay.mods } : {}),
+    ...(replay.stageId ? { stageId: replay.stageId } : {}),
   });
   for (const input of replay.inputs) {
     sim.tick(input ?? NEUTRAL_INPUT);

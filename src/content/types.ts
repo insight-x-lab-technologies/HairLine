@@ -74,6 +74,28 @@ export interface Wave {
 }
 
 /**
+ * Seção de um estágio curado (P4-04b-01): ou uma onda autoral (`wave`) ou um
+ * encontro de chefe (`boss`). A ordem no array `StageDef.sections` é a ordem de
+ * execução. Uma seção de onda termina quando a onda spawnou tudo e não há
+ * inimigo vivo; uma de chefe, ao derrotá-lo.
+ */
+export type StageSection =
+  | { readonly type: 'wave'; readonly waveId: string }
+  | { readonly type: 'boss'; readonly bossId: string };
+
+/**
+ * Estágio curado (P4-04b-01): sequência autoral onda→onda→chefe declarada em
+ * JSON. Substitui o antigo modo `campaign` (onda fixa + chefe por `enterTick`).
+ */
+export interface StageDef {
+  readonly id: string;
+  /** Nome legível (exibido no seletor e nos anúncios). */
+  readonly name: string;
+  /** Seções em ordem de execução. Mínimo 1. */
+  readonly sections: readonly StageSection[];
+}
+
+/**
  * Escudo de fase (P4-02b-02): invulnerabilidade quebrável a tiros. Enquanto
  * ativo, os tiros reduzem o HP do escudo, não o do chefe. Com `rechargeTicks`,
  * volta cheio após o intervalo, dentro da mesma fase.

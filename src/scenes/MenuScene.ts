@@ -7,6 +7,8 @@ import { getSave } from '../services/SaveService';
 import { dailySeed, dayKey } from '../services/DailySeed';
 import { getIdentity } from '../services/PlayerIdentity';
 import { pickWeeklyModifiers, combineMods, weeklySeed, weekKey } from '../systems/Modifiers';
+import { STAGE_IDS } from '../content';
+import { stagePayload, stageRows } from '../ui/stageSelect';
 import type { GameSceneData } from './GameScene';
 
 /**
@@ -28,11 +30,16 @@ export class MenuScene extends Phaser.Scene {
     const best = getSave().getBestScore();
     if (best > 0) neonText(this, cx, cy - 64, `recorde  ${best}`, 24, '#ffd166');
 
-    const endlessBtn = neonText(this, cx, cy + 20, '▶ ENDLESS', 36, '#0bd3c6').setInteractive({
+    const endlessBtn = neonText(this, cx, cy + 16, '▶ ENDLESS', 36, '#0bd3c6').setInteractive({
       useHandCursor: true,
     });
     pulse(this, endlessBtn);
     endlessBtn.on('pointerdown', () => this.start({}));
+
+    const stagesBtn = neonText(this, cx, cy + 56, '◆ ESTÁGIOS', 28, '#3df5a5').setInteractive({
+      useHandCursor: true,
+    });
+    stagesBtn.on('pointerdown', () => this.showStages());
 
     const today = new Date();
     const daily = neonText(this, cx, cy + 90, '◎ DESAFIO DIÁRIO', 30, '#ffd166').setInteractive({
@@ -90,6 +97,47 @@ export class MenuScene extends Phaser.Scene {
         nameBtn.setText(`nome: ${me.name}  ✎`);
       }
     });
+  }
+
+  /**
+   * Seletor de estágios (P4-04b-04): overlay com a lista de estágios, status de
+   * desbloqueio (✔ concluído / ▶ disponível / 🔒 travado) e melhor score. Tocar
+   * num disponível inicia a run; travado é ignorado (sem interatividade).
+   */
+  private showStages(): void {
+    const cx = VIRTUAL_WIDTH / 2;
+    const overlay = this.add.container(0, 0).setDepth(100);
+    // Fundo opaco interativo: cobre o menu e absorve toques em área vazia.
+    const bg = this.add
+      .rectangle(cx, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 0x05060a, 0.97)
+      .setInteractive();
+    overlay.add(bg);
+    overlay.add(neonText(this, cx, 150, 'ESTÁGIOS', 48, '#0bd3c6'));
+
+    stageRows(STAGE_IDS, getSave()).forEach((r, i) => {
+      const y = 300 + i * 110;
+      const status = r.unlocked ? (r.completed ? '✔' : '▶') : '🔒';
+      const color = r.unlocked ? (r.completed ? '#3df5a5' : '#ffd166') : '#5a6b7a';
+      const label = neonText(this, cx, y, `${status} ${r.name}`, 36, color);
+      const sub = r.unlocked
+        ? r.bestScore > 0
+          ? `melhor ${r.bestScore}`
+          : 'disponível'
+        : 'bloqueado';
+      const subText = neonText(this, cx, y + 38, sub, 18, '#5a6b7a');
+      overlay.add(label);
+      overlay.add(subText);
+      if (r.unlocked) {
+        label.setInteractive({ useHandCursor: true });
+        label.on('pointerdown', () => this.start(stagePayload(r.id)));
+      }
+    });
+
+    const back = neonText(this, cx, VIRTUAL_HEIGHT - 90, '‹ VOLTAR', 28, '#ff5d8f').setInteractive({
+      useHandCursor: true,
+    });
+    overlay.add(back);
+    back.on('pointerdown', () => overlay.destroy());
   }
 
   /** Inicia uma run (gesto satisfaz autoplay do áudio). */

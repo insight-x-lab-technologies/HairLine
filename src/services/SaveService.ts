@@ -11,6 +11,14 @@ export interface KeyValueStore {
 }
 
 const BEST_SCORE_KEY = 'hairline.bestScore';
+/** Bloco de progresso por estágio (P4-04b-04). Versionado para evolução futura. */
+const STAGE_PROGRESS_KEY = 'hairline.stageProgress.v1';
+
+/** Progresso persistido de um estágio: concluído? melhor pontuação? */
+export interface StageRecord {
+  readonly completed: boolean;
+  readonly bestScore: number;
+}
 
 /** Resolve o localStorage do ambiente, ou null se indisponível. */
 function defaultStore(): KeyValueStore | null {
@@ -40,6 +48,59 @@ export class SaveService {
     if (score <= this.getBestScore()) return false;
     this.store.setItem(BEST_SCORE_KEY, String(Math.floor(score)));
     return true;
+  }
+
+  // ---- Progresso por estágio (P4-04b-04) --------------------------------
+
+  /** Registro de um estágio (default: não concluído, sem score). */
+  getStageRecord(stageId: string): StageRecord {
+    const r = this.readStages()[stageId];
+    return { completed: r?.completed ?? false, bestScore: r?.bestScore ?? 0 };
+  }
+
+  /**
+   * O estágio está liberado? O primeiro da ordem está sempre aberto; os demais
+   * abrem ao concluir o anterior. `order` é a lista canônica (`STAGE_IDS`), cuja
+   * ordem é contrato de desbloqueio. Save antigo sem bloco ⇒ só o primeiro.
+   */
+  isStageUnlocked(stageId: string, order: readonly string[]): boolean {
+    const i = order.indexOf(stageId);
+    if (i <= 0) return true; // primeiro da lista (ou desconhecido) sempre aberto
+    return this.getStageRecord(order[i - 1]!).completed;
+  }
+
+  /**
+   * Grava o resultado de uma run de estágio: marca conclusão (monotônica: nunca
+   * "desconclui") e sobe o best score se aplicável. Retorna se bateu recorde.
+   */
+  recordStageResult(stageId: string, result: { completed: boolean; score: number }): {
+    isRecord: boolean;
+  } {
+    const map = this.readStages();
+    const cur = map[stageId] ?? { completed: false, bestScore: 0 };
+    const score = Math.floor(result.score);
+    const isRecord = score > cur.bestScore;
+    map[stageId] = {
+      completed: cur.completed || result.completed,
+      bestScore: Math.max(cur.bestScore, score),
+    };
+    this.writeStages(map);
+    return { isRecord };
+  }
+
+  private readStages(): Record<string, StageRecord> {
+    const raw = this.store.getItem(STAGE_PROGRESS_KEY);
+    if (!raw) return {};
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, StageRecord>) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private writeStages(map: Record<string, StageRecord>): void {
+    this.store.setItem(STAGE_PROGRESS_KEY, JSON.stringify(map));
   }
 }
 

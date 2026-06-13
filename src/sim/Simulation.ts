@@ -4,7 +4,6 @@ import { Player, type Bounds, type PlayerConfig } from './Player';
 import { AutoFire, type AutoFireConfig } from './AutoFire';
 import { BulletPool } from '../entities/BulletPool';
 import { EnemyPool } from '../entities/EnemyPool';
-import { SpawnSystem } from '../systems/SpawnSystem';
 import { emitEnemyBullets } from '../systems/PatternSystem';
 import {
   resolveShotsVsEnemies,
@@ -13,13 +12,14 @@ import {
 } from '../systems/CollisionSystem';
 import { updateGraze } from '../systems/GrazeSystem';
 import { tryReflectPulse, type ReflectConfig } from '../systems/ReflectPulse';
-import { BossSystem, type Boss } from '../systems/BossSystem';
+import { type BossSystem, type Boss } from '../systems/BossSystem';
 import { BossDirector } from '../systems/BossDirector';
 import { BossRushDirector } from '../systems/BossRushDirector';
+import { StageDirector, type StageProgress } from '../systems/StageDirector';
 import { DifficultySystem, type DifficultyConfig } from '../systems/DifficultySystem';
 import { EndlessSpawnSystem } from '../systems/EndlessSpawnSystem';
 import { GameState, type CombatConfig } from './GameState';
-import { getWave, getBoss } from '../content';
+import { getStage } from '../content';
 import playerData from '../data/player.json';
 import combatData from '../data/combat.json';
 import difficultyData from '../data/difficulty.json';
@@ -32,17 +32,17 @@ const ENEMY_SPAWN_MARGIN = 40;
 const PLAYER_SHOT_CAPACITY = 256;
 const ENEMY_BULLET_CAPACITY = 2048;
 const ENEMY_CAPACITY = 64;
-/** Onda e chefe padrão da fatia atual (Endless/Diário escolherão depois). */
-const DEFAULT_WAVE_ID = 'wave-001';
-const DEFAULT_BOSS_ID = 'warden';
+/** Estágio padrão do modo `stage` (o seletor escolhe outros — P4-04b-04). */
+const DEFAULT_STAGE_ID = 'stage-001';
 
 /**
  * Simulation — o "mundo" lógico do jogo, tickável e headless (docs/02 §3.1,
  * docs/03 §5.2).
  *
  * Orquestra todo o jogo em passos fixos: spawn (Endless procedural via Rng ou
- * campanha por onda autoral), nave + tiro, inimigos e seus padrões de bala,
- * chefe (campanha), graze, pulso refletor, colisões e pontuação. Consome
+ * estágio curado por seções de onda), nave + tiro, inimigos e seus padrões de
+ * bala, chefe (estágio/Endless/rush), graze, pulso refletor, colisões e
+ * pontuação. Consome
  * aleatoriedade SOMENTE via Rng e expõe um hash de estado reproduzível.
  *
  * Invariante: dado `seed`, `mode` e a mesma sequência de `tick(input)`, dois
@@ -63,8 +63,8 @@ export class Simulation {
   readonly enemies: EnemyPool;
   /** Estado de combate: vidas, foco, score, graze, game over (lido pelo HUD). */
   readonly state: GameState;
-  /** Sistema do chefe na campanha (entrada automática por tick). */
-  readonly bossSystem: BossSystem;
+  /** Diretor de estágio curado (modo `stage`): seções onda→onda→chefe. */
+  readonly stageDirector: StageDirector;
   /** Diretor de encontros de chefe no Endless. */
   readonly bossDirector: BossDirector;
   /** Diretor de chefes em sequência (modo Boss Rush). */
@@ -75,7 +75,6 @@ export class Simulation {
   lastReflect: { tick: number; x: number; y: number; radius: number } | null = null;
   private readonly rng: Rng;
   private readonly autoFire: AutoFire;
-  private readonly spawner: SpawnSystem;
   private readonly difficulty: DifficultySystem;
   private readonly endlessSpawner: EndlessSpawnSystem;
   private readonly grazeMargin: number;
@@ -105,11 +104,9 @@ export class Simulation {
     this.enemyBullets = new BulletPool(ENEMY_BULLET_CAPACITY);
     this.enemies = new EnemyPool(ENEMY_CAPACITY);
     this.mode = opts.mode ?? 'endless';
-    this.spawner = new SpawnSystem(getWave(opts.waveId ?? DEFAULT_WAVE_ID));
-    this.bossSystem = new BossSystem(
-      getBoss(opts.bossId ?? DEFAULT_BOSS_ID),
+    this.stageDirector = new StageDirector(
+      getStage(opts.stageId ?? DEFAULT_STAGE_ID),
       this.bounds.w / 2,
-      true,
       opts.seed,
     );
 
@@ -165,14 +162,22 @@ export class Simulation {
   get boss(): Boss | null {
     if (this.mode === 'endless') return this.bossDirector.boss;
     if (this.mode === 'bossrush') return this.bossRush.boss;
-    return this.bossSystem.boss;
+    return this.stageDirector.boss;
   }
 
   /** BossSystem ativo (mecânicas de P4-02b: escudo/partes/teleporte) ou null. */
   get activeBossSystem(): BossSystem | null {
     if (this.mode === 'endless') return this.bossDirector.currentSystem;
     if (this.mode === 'bossrush') return this.bossRush.currentSystem;
-    return this.bossSystem;
+    return this.stageDirector.currentSystem;
+  }
+
+  /**
+   * Progresso do estágio (P4-04b-02): seção atual/total/tipo/nome, ou `null`
+   * fora do modo `stage`. Somente-leitura: nada do render/HUD entra na sim.
+   */
+  get stageProgress(): StageProgress | null {
+    return this.mode === 'stage' ? this.stageDirector.progress : null;
   }
 
   /**
@@ -187,10 +192,10 @@ export class Simulation {
     }
 
     // Ordem de update determinística (docs/02 §3.1):
-    //  1) spawn de inimigos (Endless: procedural | campanha: onda | bossrush: nenhum);
+    //  1) spawn de inimigos (Endless: procedural | stage: onda da seção | bossrush: nenhum);
     //  2) nave em passo fixo + tiro automático;
     //  3) inimigos emitem balas (função da idade) e então se movem/envelhecem;
-    //  4) chefe (campanha / Endless / Boss Rush);
+    //  4) chefe (stage / Endless / Boss Rush);
     //  5) integra tiros e balas inimigas, reciclando o que sai do campo;
     //  6) graze (raspão carrega Foco) ANTES das colisões;
     //  7) colisões (tiros↔inimigos, balas↔nave) e temporizadores.
@@ -199,9 +204,9 @@ export class Simulation {
       if (!this.bossDirector.boss) {
         this.endlessSpawner.update(this._tickCount, this.enemies, this.rng);
       }
-    } else if (this.mode === 'campaign') {
-      this.rng.nextUint32(); // reserva (campanha ainda não usa Rng)
-      this.spawner.update(this._tickCount, this.enemies);
+    } else if (this.mode === 'stage') {
+      // Spawna a onda da seção atual (no-op em seção de chefe).
+      this.stageDirector.spawnPhase(this._tickCount, this.enemies);
     }
     // bossrush: sem inimigos comuns (só chefes em sequência).
 
@@ -213,11 +218,15 @@ export class Simulation {
     );
     this.enemies.advance(this.fixedDeltaSec, this.bounds);
 
-    // Chefe: campanha (entrada automática), Endless (encontros) ou Boss Rush.
-    if (this.mode === 'campaign') {
-      this.bossSystem.update(this._tickCount, this.enemyBullets, this.player.x, this.player.y, {
-        enemies: this.enemies,
-      });
+    // Chefe: estágio (seção de chefe), Endless (encontros) ou Boss Rush.
+    if (this.mode === 'stage') {
+      this.stageDirector.bossPhase(
+        this._tickCount,
+        this.enemyBullets,
+        this.player.x,
+        this.player.y,
+        this.enemies,
+      );
     } else if (this.mode === 'endless') {
       this.bossDirector.update(
         this.level,
@@ -263,12 +272,12 @@ export class Simulation {
     if (bossSys && bossSys.boss.alive) {
       resolveShotsVsBossSystem(this.playerShots, bossSys, this.state);
     }
-    // Campanha: derrotar o chefe é VITÓRIA. Boss Rush: vitória ao vencer todos.
-    // Endless: o BossDirector dá o bônus e a run continua (é infinito).
-    if (this.mode === 'campaign' && this.bossSystem.boss.defeated && !this.state.won) {
-      this.bossSystem.cleanupAdds(this.enemies);
-      this.state.addScore(this.bossSystem.defeatScore);
-      this.state.win();
+    // Estágio: concluir a última seção é VITÓRIA (o StageDirector soma o
+    // defeatScore de cada chefe na transição). Boss Rush: vitória ao vencer
+    // todos. Endless: o BossDirector dá o bônus e a run continua (é infinito).
+    if (this.mode === 'stage') {
+      this.stageDirector.endPhase(this.enemies, this.state);
+      if (this.stageDirector.completed && !this.state.won) this.state.win();
     } else if (this.mode === 'bossrush' && this.bossRush.completed && !this.state.won) {
       this.state.win();
     }
@@ -287,6 +296,9 @@ export class Simulation {
     const hashBoss = this.boss;
     this.foldHash(hashBoss && hashBoss.alive ? hashBoss.hp : -1);
     this.foldHash(input.focus ? 1 : 0);
+    // Seção atual do estágio (P4-04b-01): transição de seção entra no hash para
+    // que replay/anti-cheat cubram o avanço onda→onda→chefe.
+    if (this.mode === 'stage') this.foldHash(this.stageDirector.sectionIndex);
     // Estado das mecânicas do chefe (P4-02b) no checksum: escudo, partes e
     // ciclo de teleporte — sem isso o anti-cheat/replay não cobriria a luta.
     if (bossSys && bossSys.boss.alive) {

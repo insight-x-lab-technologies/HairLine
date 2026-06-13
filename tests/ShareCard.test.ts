@@ -22,7 +22,7 @@ describe('ShareCard — resultado compartilhável (docs/04 Fase 3)', () => {
   });
 
   it('marca vitória quando won=true', () => {
-    const txt = shareCard({ mode: 'campaign', score: 9000, graze: 50, level: 1, won: true });
+    const txt = shareCard({ mode: 'stage', score: 9000, graze: 50, level: 1, won: true });
     expect(txt.toLowerCase()).toContain('vit');
   });
 

@@ -1,0 +1,9 @@
+{
+  "id": "stage-002",
+  "name": "Espiral",
+  "sections": [
+    { "type": "wave", "waveId": "wave-002" },
+    { "type": "wave", "waveId": "wave-003" },
+    { "type": "boss", "bossId": "spinner" }
+  ]
+}

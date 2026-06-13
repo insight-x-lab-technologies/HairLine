@@ -1,0 +1,9 @@
+{
+  "id": "stage-001",
+  "name": "Primeiro Corte",
+  "sections": [
+    { "type": "wave", "waveId": "wave-001" },
+    { "type": "wave", "waveId": "wave-002" },
+    { "type": "boss", "bossId": "warden" }
+  ]
+}

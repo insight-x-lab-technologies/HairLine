@@ -32,6 +32,8 @@ export interface GameSceneData {
   mode?: GameMode;
   daily?: boolean;
   dayKey?: string;
+  /** Id do estágio curado (modo `stage`). */
+  stageId?: string;
   /** Modificadores de regra (evento semanal). */
   mods?: RunMods;
   /** Rótulos dos modificadores ativos (para exibir no HUD). */
@@ -72,7 +74,14 @@ export class GameScene extends Phaser.Scene {
   private recorder!: ReplayRecorder;
   private daily = false;
   private dayKey: string | undefined;
+  private stageId: string | undefined;
   private modLabels: string[] = [];
+  /** Indicador persistente de progresso do estágio ("n/m"). */
+  private stageHud: Phaser.GameObjects.Text | undefined;
+  /** Texto de anúncio central reutilizado ("ONDA n/m" / "CHEFE"). */
+  private announceText: Phaser.GameObjects.Text | undefined;
+  /** Última seção anunciada (0 = nenhuma), para disparar o anúncio uma vez. */
+  private lastSection = 0;
 
   /** Alvo de movimento corrente, em coordenadas do mundo virtual. */
   private readonly target = { x: VIRTUAL_WIDTH / 2, y: VIRTUAL_HEIGHT * 0.78 };
@@ -99,14 +108,16 @@ export class GameScene extends Phaser.Scene {
     const mode = data.mode ?? 'endless';
     this.daily = data.daily ?? false;
     this.dayKey = data.dayKey;
+    this.stageId = data.stageId;
     this.modLabels = data.modLabels ?? [];
     this.sim = new Simulation({
       seed,
       tickRateHz: TICK_RATE_HZ,
       mode,
       ...(data.mods ? { mods: data.mods } : {}),
+      ...(this.stageId ? { stageId: this.stageId } : {}),
     });
-    this.recorder = new ReplayRecorder(seed, mode, data.mods);
+    this.recorder = new ReplayRecorder(seed, mode, data.mods, this.stageId);
     // Alvo inicial = posição inicial da nave, para "neutro" = ficar parado.
     this.target.x = this.sim.player.x;
     this.target.y = this.sim.player.y;
@@ -163,6 +174,15 @@ export class GameScene extends Phaser.Scene {
     this.input.keyboard?.on('keydown-ESC', () => this.pauseGame());
     this.input.keyboard?.on('keydown-P', () => this.pauseGame());
 
+    // --- Progresso do estágio (P4-04b-02): indicador "n/m" + anúncios --------
+    if (mode === 'stage') {
+      this.stageHud = neonText(this, 0, 0, '', 22, '#ffd166').setOrigin(0.5, 0);
+      // Anúncio central no terço superior (não cobre a nave); reutilizado.
+      this.announceText = neonText(this, VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT * 0.3, '', 56, '#9af7ef')
+        .setOrigin(0.5)
+        .setAlpha(0);
+    }
+
     this.showTutorialHint();
     this.layoutHud();
     // Reposiciona ao girar/redimensionar (mantém HUD fora das safe-areas).
@@ -202,6 +222,8 @@ export class GameScene extends Phaser.Scene {
     this.muteBtn.setPosition(VIRTUAL_WIDTH - pad.right - 48, pad.top);
     this.pulseBtn.setPosition(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT - pad.bottom - 12);
     this.hintText?.setPosition(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT - pad.bottom - 70);
+    // Indicador de estágio no topo-centro (acima da barra de vida do chefe).
+    this.stageHud?.setPosition(VIRTUAL_WIDTH / 2, pad.top);
   }
 
   /** Dica de controles que esmaece nos primeiros segundos (tutorial mínimo). */
@@ -247,6 +269,9 @@ export class GameScene extends Phaser.Scene {
       this.reactToCue(cue);
     }
     this.prevAudio = curAudio;
+
+    // 2d) Progresso do estágio: anúncio de seção + indicador "n/m".
+    this.updateStageProgress();
 
     // 3) Render: a nave segue a posição AUTORITATIVA da simulação (a lógica de
     //    movimento vive no headless sim; aqui é só apresentação).
@@ -308,6 +333,28 @@ export class GameScene extends Phaser.Scene {
         `inimigos ${this.sim.enemies.activeCount}  balas ${this.sim.enemyBullets.activeCount}  fps ${Math.round(this.game.loop.actualFps)}` +
         modLine,
     );
+  }
+
+  /**
+   * Lê o progresso do estágio da sim (somente leitura) e reage no render
+   * (P4-04b-02): mantém o indicador "n/m" e dispara o anúncio uma vez por
+   * troca de seção. O "último visto" mora na CENA, nunca na simulação.
+   */
+  private updateStageProgress(): void {
+    const p = this.sim.stageProgress;
+    if (!p || !this.stageHud) return;
+    this.stageHud.setText(`${p.section}/${p.total}`);
+    if (p.section === this.lastSection) return;
+    this.lastSection = p.section;
+    const t = this.announceText;
+    if (t) {
+      t.setText(p.kind === 'boss' ? 'CHEFE' : `ONDA ${p.section}/${p.total}`);
+      t.setColor(p.kind === 'boss' ? '#ff5d8f' : '#9af7ef');
+      t.setAlpha(1);
+      this.tweens.killTweensOf(t);
+      this.tweens.add({ targets: t, alpha: 0, delay: 900, duration: 700 });
+    }
+    if (p.kind === 'boss') getAudio().play('bossentry');
   }
 
   /** Reação visual de câmera aos eventos (clareza de dano, juice). */
@@ -499,6 +546,7 @@ export class GameScene extends Phaser.Scene {
       mode: this.sim.mode,
       daily: this.daily,
       dayKey: this.dayKey,
+      stageId: this.stageId,
       replay: this.recorder.finalize(this.sim),
     });
   }

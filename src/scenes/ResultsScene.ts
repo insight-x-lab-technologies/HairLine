@@ -9,6 +9,7 @@ import { shareCard, type ShareData } from '../services/ShareCard';
 import { shareResult } from '../services/ShareImage';
 import { verifyReplay, type Replay } from '../sim/Replay';
 import type { GameMode } from '../sim/types';
+import { getStage, STAGE_IDS } from '../content';
 
 interface ResultsData {
   score?: number;
@@ -19,6 +20,7 @@ interface ResultsData {
   mode?: GameMode;
   daily?: boolean;
   dayKey?: string;
+  stageId?: string;
   replay?: Replay;
 }
 
@@ -52,6 +54,8 @@ export class ResultsScene extends Phaser.Scene {
 
     if (data.daily && data.dayKey) {
       this.showDaily(cx, data, score);
+    } else if (data.mode === 'stage' && data.stageId) {
+      this.showStage(cx, data, score);
     }
 
     this.showShare(cx, data, score);
@@ -63,6 +67,31 @@ export class ResultsScene extends Phaser.Scene {
       this.input.once('pointerdown', () => this.scene.start(SceneKeys.Menu));
       this.input.keyboard?.once('keydown-ENTER', () => this.scene.start(SceneKeys.Menu));
     });
+  }
+
+  /**
+   * Bloco de estágio (P4-04b-04): grava conclusão + best local e mostra o
+   * estado (estágio concluído / novo recorde do estágio). Desbloqueio do
+   * próximo é consequência da conclusão (lido pelo seletor no Menu).
+   */
+  private showStage(cx: number, data: ResultsData, score: number): void {
+    const stageId = data.stageId!;
+    const stage = getStage(stageId);
+    const { isRecord } = getSave().recordStageResult(stageId, {
+      completed: data.won ?? false,
+      score,
+    });
+    if (data.won) {
+      pulse(this, neonText(this, cx, 400, `✓ ${stage.name} concluído!`, 24, '#3df5a5'));
+      const idx = STAGE_IDS.indexOf(stageId);
+      const next = idx >= 0 && idx + 1 < STAGE_IDS.length ? getStage(STAGE_IDS[idx + 1]!) : null;
+      if (next) neonText(this, cx, 436, `▶ ${next.name} desbloqueado`, 18, '#0bd3c6');
+    } else {
+      neonText(this, cx, 400, `${stage.name}`, 22, '#5a6b7a');
+    }
+    if (isRecord) {
+      neonText(this, cx, data.won ? 470 : 436, '★ recorde do estágio', 18, '#ffd166');
+    }
   }
 
   /** Bloco do Desafio Diário: verificação anti-cheat + envio/listagem do ranking. */
@@ -107,6 +136,8 @@ export class ResultsScene extends Phaser.Scene {
 
   /** Compartilhar: imagem (Web Share/download) + copiar texto (fator Wordle). */
   private showShare(cx: number, data: ResultsData, score: number): void {
+    // Rótulo do estágio para o card (ex.: "Estágio 2"), pela ordem de STAGE_IDS.
+    const stageIdx = data.stageId ? STAGE_IDS.indexOf(data.stageId) : -1;
     const share: ShareData = {
       mode: data.daily ? 'daily' : (data.mode ?? 'endless'),
       score,
@@ -114,6 +145,7 @@ export class ResultsScene extends Phaser.Scene {
       level: data.level ?? 1,
       ...(data.dayKey ? { dayKey: data.dayKey } : {}),
       ...(data.won ? { won: true } : {}),
+      ...(data.mode === 'stage' && stageIdx >= 0 ? { stageLabel: `Estágio ${stageIdx + 1}` } : {}),
     };
 
     const imgBtn = neonText(
