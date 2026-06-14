@@ -1,0 +1,35 @@
+{
+  "ships": [
+    {
+      "id": "vanguard",
+      "name": "Vanguard",
+      "desc": "Equilibrada. A nave padrao, sem trade-offs.",
+      "default": true,
+      "rules": {}
+    },
+    {
+      "id": "glaive",
+      "name": "Glaive",
+      "desc": "Cadencia alta e tiro veloz, mas 2 vidas e graze curto. Ataque puro, pouca margem.",
+      "rules": {
+        "fireIntervalMul": 0.7,
+        "shotSpeedMul": 1.2,
+        "maxSpeedMul": 1.1,
+        "grazeMarginMul": 0.8,
+        "livesDelta": -1
+      }
+    },
+    {
+      "id": "bulwark",
+      "name": "Bulwark",
+      "desc": "Resistente: 4 vidas, graze largo e mais Foco, porem lenta e de cadencia baixa.",
+      "rules": {
+        "livesDelta": 1,
+        "grazeMarginMul": 1.4,
+        "focusPerGrazeMul": 1.15,
+        "maxSpeedMul": 0.82,
+        "fireIntervalMul": 1.35
+      }
+    }
+  ]
+}

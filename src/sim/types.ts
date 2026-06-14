@@ -45,4 +45,10 @@ export interface SimulationOptions {
   readonly mode?: GameMode;
   /** Modificadores de regra (evento semanal). Fazem parte do estado determinístico. */
   readonly mods?: RunMods;
+  /**
+   * Classe de nave (P6-04): muda regras de jogo (mobilidade/cadência/vidas/graze).
+   * Entrada determinística — entra no replay e na linhagem do hash. Ausente ⇒
+   * nave default (identidade), comportamento byte-idêntico ao histórico.
+   */
+  readonly shipId?: string;
 }

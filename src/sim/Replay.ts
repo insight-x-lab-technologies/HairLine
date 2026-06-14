@@ -21,6 +21,8 @@ export interface Replay {
   readonly mods?: RunMods;
   /** Id do estágio (modo `stage`) — necessário para re-simular (P4-04b-01). */
   readonly stageId?: string;
+  /** Classe de nave (P6-04) — necessária para re-simular com as mesmas regras. */
+  readonly shipId?: string;
 }
 
 export class ReplayRecorder {
@@ -31,6 +33,7 @@ export class ReplayRecorder {
     private readonly mode: GameMode,
     private readonly mods?: RunMods,
     private readonly stageId?: string,
+    private readonly shipId?: string,
   ) {}
 
   /** Registra o input de um tick (cópia normalizada). */
@@ -54,6 +57,7 @@ export class ReplayRecorder {
       score: sim.state.score,
       ...(this.mods ? { mods: this.mods } : {}),
       ...(this.stageId ? { stageId: this.stageId } : {}),
+      ...(this.shipId ? { shipId: this.shipId } : {}),
     };
   }
 }
@@ -71,6 +75,7 @@ export function verifyReplay(replay: Replay): VerifyResult {
     mode: replay.mode,
     ...(replay.mods ? { mods: replay.mods } : {}),
     ...(replay.stageId ? { stageId: replay.stageId } : {}),
+    ...(replay.shipId ? { shipId: replay.shipId } : {}),
   });
   for (const input of replay.inputs) {
     sim.tick(input ?? NEUTRAL_INPUT);

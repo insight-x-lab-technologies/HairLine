@@ -221,3 +221,56 @@ describe('FixedStepLoop — acumulador (docs/02 §3.1)', () => {
     expect(loop.alpha).toBeCloseTo(0.5, 2);
   });
 });
+
+describe('Simulation — classe de nave determinística (P6-04)', () => {
+  const inputs = Array.from({ length: 240 }, (_, i) => ({
+    moveX: 360 + Math.round(60 * Math.sin(i / 15)),
+    moveY: 1000,
+    focus: false,
+  }));
+  const hashOf = (shipId: string | undefined): string => {
+    const sim = new Simulation(shipId ? { seed: 9, shipId } : { seed: 9 });
+    for (const inp of inputs) sim.tick(inp);
+    return sim.hashState();
+  };
+
+  it('nave default ≡ sem shipId: hash byte-idêntico (replays/Diário antigos válidos)', () => {
+    expect(hashOf('vanguard')).toBe(hashOf(undefined));
+  });
+
+  it('classes diferentes produzem hashes diferentes', () => {
+    expect(hashOf('glaive')).not.toBe(hashOf('vanguard'));
+    expect(hashOf('bulwark')).not.toBe(hashOf('vanguard'));
+    expect(hashOf('glaive')).not.toBe(hashOf('bulwark'));
+  });
+
+  it('a mesma classe + mesmos inputs é determinística', () => {
+    expect(hashOf('bulwark')).toBe(hashOf('bulwark'));
+  });
+
+  it('shipId inválido resolve para a default (nunca quebra a simulação)', () => {
+    expect(hashOf('inexistente')).toBe(hashOf('vanguard'));
+  });
+
+  it('as regras alteram o estado: Bulwark começa com mais vidas que Vanguard', () => {
+    const base = new Simulation({ seed: 1, shipId: 'vanguard' });
+    const tank = new Simulation({ seed: 1, shipId: 'bulwark' });
+    expect(tank.state.lives).toBeGreaterThan(base.state.lives);
+  });
+
+  it('Glaive (cadência alta) atira mais que Vanguard no mesmo intervalo', () => {
+    const fire = (shipId: string): number => {
+      const sim = new Simulation({ seed: 1, shipId });
+      let shots = 0;
+      let prev = 0;
+      // Conta disparos por aumento do pool (antes de reciclar saindo do campo).
+      for (let i = 0; i < 30; i++) {
+        sim.tick({ moveX: 360, moveY: 1100, focus: false });
+        if (sim.playerShots.activeCount > prev) shots++;
+        prev = sim.playerShots.activeCount;
+      }
+      return shots;
+    };
+    expect(fire('glaive')).toBeGreaterThan(fire('vanguard'));
+  });
+});

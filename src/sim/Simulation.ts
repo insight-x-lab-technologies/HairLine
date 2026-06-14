@@ -20,7 +20,14 @@ import { DifficultySystem, type DifficultyConfig } from '../systems/DifficultySy
 import { EndlessSpawnSystem } from '../systems/EndlessSpawnSystem';
 import { GameState, type CombatConfig } from './GameState';
 import { FxEventBuffer } from './FxEvents';
-import { getStage } from '../content';
+import {
+  shipRules,
+  applyShipToPlayer,
+  applyShipToAutoFire,
+  applyShipToCombat,
+  isIdentity,
+} from './Ships';
+import { getStage, getShipOrDefault, SHIP_IDS } from '../content';
 import playerData from '../data/player.json';
 import combatData from '../data/combat.json';
 import difficultyData from '../data/difficulty.json';
@@ -100,14 +107,26 @@ export class Simulation {
     this.rng = new Rng(opts.seed);
     const mods = opts.mods ?? {};
 
-    // Player com velocidade possivelmente modificada (evento semanal).
+    // Classe de nave (P6-04): regras de jogo aplicadas SOBRE os mods do evento
+    // semanal. A default é identidade ⇒ configs byte-idênticas ao histórico; só
+    // a nave não-default dobra seu ordinal no checksum (abaixo), para que duas
+    // classes distintas tenham linhagens de hash distintas.
+    const ship = getShipOrDefault(opts.shipId);
+    const rules = shipRules(ship);
+
+    // Player com velocidade possivelmente modificada (evento semanal) + classe.
     const pData = playerData as PlayerConfig;
     this.player = new Player(
-      mods.playerSpeedMul
-        ? { ...pData, maxSpeedPxPerSec: pData.maxSpeedPxPerSec * mods.playerSpeedMul }
-        : pData,
+      applyShipToPlayer(
+        mods.playerSpeedMul
+          ? { ...pData, maxSpeedPxPerSec: pData.maxSpeedPxPerSec * mods.playerSpeedMul }
+          : pData,
+        rules,
+      ),
     );
-    this.autoFire = new AutoFire((playerData as { autoFire: AutoFireConfig }).autoFire);
+    this.autoFire = new AutoFire(
+      applyShipToAutoFire((playerData as { autoFire: AutoFireConfig }).autoFire, rules),
+    );
     this.playerShots = new BulletPool(PLAYER_SHOT_CAPACITY);
     this.enemyBullets = new BulletPool(ENEMY_BULLET_CAPACITY);
     this.enemies = new EnemyPool(ENEMY_CAPACITY);
@@ -143,18 +162,27 @@ export class Simulation {
       ENEMY_SPAWN_MARGIN,
     );
 
-    // Combate com regras de pontuação/foco/vidas modificadas.
+    // Combate com regras de pontuação/foco/vidas modificadas (mods) e então a
+    // classe de nave (foco/graze/vidas/i-frames). A default é identidade.
     const baseCombat = combatData as CombatConfig & ReflectConfig;
-    const combat: CombatConfig & ReflectConfig = {
+    const moddedCombat: CombatConfig & ReflectConfig = {
       ...baseCombat,
       scorePerGraze: Math.round(baseCombat.scorePerGraze * (mods.scorePerGrazeMul ?? 1)),
       scorePerKill: Math.round(baseCombat.scorePerKill * (mods.scorePerKillMul ?? 1)),
       focusPerGraze: baseCombat.focusPerGraze * (mods.focusPerGrazeMul ?? 1),
       lives: mods.livesOverride ?? baseCombat.lives,
     };
+    const combat = applyShipToCombat(moddedCombat, rules);
     this.state = new GameState(combat);
     this._grazeMargin = combat.grazeMarginPx;
     this.reflectCfg = combat;
+
+    // Identidade da classe na linhagem do hash (P6-04): só a nave NÃO-default
+    // dobra seu ordinal (a default não toca o checksum ⇒ replays/Diário antigos
+    // ficam byte-idênticos). Ordinal +1 garante valor != 0 (mix(h,0) não é no-op).
+    if (!isIdentity(rules)) {
+      this.checksum = this.mix(this.checksum, SHIP_IDS.indexOf(ship.id) + 1);
+    }
   }
 
   get tickCount(): number {

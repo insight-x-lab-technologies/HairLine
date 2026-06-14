@@ -178,6 +178,32 @@ faíscas usam a cor escolhida, e o preset de trilha é repassado ao
 `AudioService` (`setMusicPreset`, variação só de síntese). Nada disso chega à
 simulação — determinismo coberto por teste de regressão (`tests/hangar.test.ts`).
 
+## Classes de nave — `src/data/ships.json` (P6-04)
+
+Ao contrário do cosmético (P6-01, só aparência), a **classe de nave** muda
+**regras de jogo** — *diferentes, não mais fortes*: cada nave é um **sidegrade**
+com trade-off explícito. Cada classe é um conjunto de **multiplicadores** sobre
+as configs base (`maxSpeedMul`, `focusSpeedFactorMul`, `hitboxRadiusMul`,
+`fireIntervalMul`, `shotSpeedMul`, `focusPerGrazeMul`, `grazeMarginMul`,
+`invulnMul`) mais `livesDelta`. Campos omitidos no JSON ⇒ identidade.
+
+Como a classe **afeta a simulação**, é **entrada determinística**: entra em
+`SimulationOptions.shipId`, é gravada no `Replay`/`verifyReplay` e dobrada na
+linhagem do `hashState()` (só a nave **não-default**). A nave **default é
+identidade pura** (regras neutras) ⇒ comportamento atual byte-idêntico, então
+replays e o Diário já gravados continuam válidos. O roster e suas regras são
+validados no load (`validateShips`: exatamente 1 default = identidade, muls > 0,
+`livesDelta` inteiro). Tuning mora no JSON.
+
+Roster inicial: **vanguard** (baseline), **glaive** (cadência alta + tiro veloz,
+mas 2 vidas e graze curto — ataque, pouca margem) e **bulwark** (4 vidas, graze
+largo e mais Foco, porém lenta e de cadência baixa). São **sidegrades sem
+desbloqueio** (todos disponíveis). A seleção é persistida (`SaveService`) e há
+um seletor no Menu. **Regra de justiça:** o **Desafio Diário força a nave
+default** — mesma seed *e* mesmas regras para todos; os demais modos usam a nave
+escolhida. (Distinção visual por classe fica para depois; a aparência continua
+sendo cosmético.) Ver TD-25.
+
 ## Conquistas — `src/data/achievements.json` (P6-02)
 
 Metas declarativas avaliadas **ao fim de cada run** (nunca durante; a sim não as

@@ -26,7 +26,12 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   - `FixedStepLoop.ts` — acumulador de tempo → N ticks fixos (anti espiral-morte).
   - `Player.ts`, `AutoFire.ts`, `GameState.ts` (vidas/foco/score/kills/won).
   - `Replay.ts` — `ReplayRecorder` + `verifyReplay` (re-simula e confere hash/score).
-  - `types.ts` — `SimInput`, `SimulationOptions`, `GameMode`, `RunMods`.
+  - `Ships.ts` (P6-04) — classes de nave com **regras de jogo** (multiplicadores
+    puros sobre player/autofire/combat + `livesDelta`) e `validateShips`. A
+    classe é **config determinística da run** (não cosmético): `shipId` entra em
+    `SimulationOptions`, no replay e na linhagem do hash; a **default é
+    identidade** (byte-idêntico ao histórico). O Diário força a default.
+  - `types.ts` — `SimInput`, `SimulationOptions` (inclui `shipId`), `GameMode`, `RunMods`.
 - **`src/systems/`** (lógica pura, sem Phaser):
   - Spawn: `SpawnSystem` (onda), `EndlessSpawnSystem` (procedural + formações),
     `DifficultySystem`, `Formations`.
@@ -52,7 +57,7 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   getPattern/getEnemyDef/getBoss/getWave/getStage/**getEffects/getAudioConfig** +
   listas de ids, validação de bosses/estágios/**effects/audio** no load) e
   `types.ts`. Único ponto de `cast` dos JSON.
-- **`src/data/`**: JSON de patterns/enemies/bosses/waves/**stages** +
+- **`src/data/`**: JSON de patterns/enemies/bosses/waves/**stages**/**ships** +
   difficulty/player/combat/**effects/audio**.
 - **`src/scenes/`** (Phaser): Boot, Preload, Menu, Game, Pause, Results.
 - **`src/ui/`**: `neonText`, `shapes` (polígonos), `hudLayout` (safe-areas),

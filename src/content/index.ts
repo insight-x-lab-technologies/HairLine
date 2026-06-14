@@ -49,6 +49,8 @@ import cosmeticsData from '../data/cosmetics.json';
 import { validateCosmetics, type CosmeticCatalog } from '../services/Cosmetics';
 import achievementsData from '../data/achievements.json';
 import { validateAchievements, type AchievementDef } from '../services/Achievements';
+import shipsData from '../data/ships.json';
+import { validateShips, type ShipDef } from '../sim/Ships';
 
 /**
  * Content — registro central do conteúdo dirigido por dados (docs/02 §3.2).
@@ -184,6 +186,8 @@ const effects = effectsData as unknown as EffectsConfig;
 const audioConfig = audioData as unknown as AudioConfig;
 const cosmetics = cosmeticsData as unknown as CosmeticCatalog;
 const achievements = (achievementsData as unknown as { achievements: AchievementDef[] }).achievements;
+const ships = (shipsData as unknown as { ships: ShipDef[] }).ships;
+const shipMap = index<ShipDef>(ships);
 const VALID_CUES = new Set<string>(ALL_AUDIO_CUES);
 
 function assertFiniteNonNeg(n: unknown, where: string): void {
@@ -276,6 +280,8 @@ validateAudioConfig(audioConfig);
 validateCosmetics(cosmetics);
 // P6-02-01: definições de conquista validadas no carregamento.
 validateAchievements(achievements);
+// P6-04: roster de naves validado no carregamento (1 default = identidade etc.).
+validateShips(ships);
 
 export function getEffects(): EffectsConfig {
   return effects;
@@ -295,6 +301,30 @@ export function getAchievementDefs(): readonly AchievementDef[] {
   return achievements;
 }
 
+/** Roster de naves (P6-04), na ordem do JSON (= ordem de exibição no seletor). */
+export function getShips(): readonly ShipDef[] {
+  return ships;
+}
+
+/** Id da nave default (baseline/identidade). Garantido único por `validateShips`. */
+export const DEFAULT_SHIP_ID: string = ships.find((s) => s.default)!.id;
+
+/** Classe de nave por id, ou lança se desconhecida. */
+export function getShip(id: string): ShipDef {
+  const s = shipMap.get(id);
+  if (!s) throw new Error(`Nave desconhecida: ${id}`);
+  return s;
+}
+
+/**
+ * Classe de nave por id, caindo na default se ausente/desconhecida. Usado pela
+ * `Simulation`/anti-cheat: id inválido nunca quebra a re-simulação (resolve para
+ * a baseline; um id válido diferente do gravado muda o hash e reprova o replay).
+ */
+export function getShipOrDefault(id: string | undefined): ShipDef {
+  return (id !== undefined && shipMap.get(id)) || getShip(DEFAULT_SHIP_ID);
+}
+
 /** Cue de áudio cuja seção de haptics deve existir (para integração na cena). */
 export function hapticPatternFor(cue: AudioCue): readonly number[] | undefined {
   return effects.haptics.patterns[cue];
@@ -307,6 +337,8 @@ export const WAVE_IDS: readonly string[] = [...waves.keys()];
 export const BOSS_IDS: readonly string[] = [...bosses.keys()];
 /** Ids dos estágios na ordem de registro = ordem de desbloqueio (P4-04b-04). */
 export const STAGE_IDS: readonly string[] = [...stages.keys()];
+/** Ids das naves na ordem do JSON (P6-04). O ordinal entra no hash da run. */
+export const SHIP_IDS: readonly string[] = [...shipMap.keys()];
 
 export function getPattern(id: string): Pattern {
   const p = patterns.get(id);

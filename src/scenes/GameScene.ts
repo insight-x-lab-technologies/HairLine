@@ -45,6 +45,8 @@ export interface GameSceneData {
   dayKey?: string;
   /** Id do estágio curado (modo `stage`). */
   stageId?: string;
+  /** Classe de nave (P6-04): muda regras de jogo. Ausente ⇒ nave default. */
+  shipId?: string;
   /** Modificadores de regra (evento semanal). */
   mods?: RunMods;
   /** Rótulos dos modificadores ativos (para exibir no HUD). */
@@ -171,8 +173,9 @@ export class GameScene extends Phaser.Scene {
       mode,
       ...(data.mods ? { mods: data.mods } : {}),
       ...(this.stageId ? { stageId: this.stageId } : {}),
+      ...(data.shipId ? { shipId: data.shipId } : {}),
     });
-    this.recorder = new ReplayRecorder(seed, mode, data.mods, this.stageId);
+    this.recorder = new ReplayRecorder(seed, mode, data.mods, this.stageId, data.shipId);
     // Alvo inicial = posição inicial da nave, para "neutro" = ficar parado.
     this.target.x = this.sim.player.x;
     this.target.y = this.sim.player.y;

@@ -20,6 +20,8 @@ const STAGE_PROGRESS_KEY = 'hairline.stageProgress.v1';
 const HAPTICS_KEY = 'hairline.haptics';
 /** Seleção de cosméticos do jogador (P6-01-01). Parcial; ausência ⇒ defaults. */
 const LOADOUT_KEY = 'hairline.loadout.v1';
+/** Classe de nave escolhida (P6-04). Ausente/inválida ⇒ nave default. */
+const SHIP_KEY = 'hairline.ship.v1';
 /** Totais acumulados do perfil (P6-02-01). Base mínima — P6-03-01 expande. */
 const PROFILE_TOTALS_KEY = 'hairline.profile.totals.v1';
 /** Melhor pontuação por modo (P6-02-01). Chaves: endless/stage/bossrush/daily. */
@@ -106,6 +108,24 @@ export class SaveService {
   /** Persiste a seleção de cosméticos (parcial). */
   setLoadoutSelection(selection: Partial<Loadout>): void {
     this.store.setItem(LOADOUT_KEY, JSON.stringify(selection));
+  }
+
+  // ---- Seleção de classe de nave (P6-04) --------------------------------
+
+  /**
+   * Id da classe de nave escolhida, ou null se nenhuma. Persistência burra: a
+   * resolução para a nave default (id ausente/inválido) é do chamador via
+   * `getShipOrDefault` — a classe afeta a simulação, então a validade do id é
+   * checada contra o roster, não aqui.
+   */
+  getSelectedShipId(): string | null {
+    const raw = this.store.getItem(SHIP_KEY);
+    return raw && raw.length > 0 ? raw : null;
+  }
+
+  /** Persiste a classe de nave escolhida. */
+  setSelectedShipId(id: string): void {
+    this.store.setItem(SHIP_KEY, id);
   }
 
   // ---- Perfil: totais + conquistas (P6-02-01) ---------------------------

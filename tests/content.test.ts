@@ -7,6 +7,10 @@ import {
   getStage,
   getCosmetics,
   getAchievementDefs,
+  getShips,
+  getShip,
+  getShipOrDefault,
+  DEFAULT_SHIP_ID,
   validateBossDef,
   validateStageDef,
   PATTERN_IDS,
@@ -14,9 +18,11 @@ import {
   BOSS_IDS,
   WAVE_IDS,
   STAGE_IDS,
+  SHIP_IDS,
 } from '../src/content';
 import { validateCosmetics, getDefault } from '../src/services/Cosmetics';
 import { validateAchievements } from '../src/services/Achievements';
+import { validateShips, shipRules, isIdentity } from '../src/sim/Ships';
 import type { BossDef, StageDef } from '../src/content/types';
 
 describe('content — integridade dos dados (docs/02 §3.2)', () => {
@@ -159,6 +165,18 @@ describe('content — integridade dos dados (docs/02 §3.2)', () => {
     expect(getDefault(c, 'ship').id).toBe('ship-default');
     expect(getDefault(c, 'shotColor').id).toBe('shot-default');
     expect(getDefault(c, 'music').id).toBe('music-default');
+  });
+
+  it('o roster de naves inicial é válido e a default é identidade (P6-04)', () => {
+    const ships = getShips();
+    expect(() => validateShips(ships)).not.toThrow();
+    expect(ships.length).toBeGreaterThanOrEqual(2);
+    // DEFAULT_SHIP_ID é a primeira da ordem (ordinal estável) e é baseline pura.
+    expect(SHIP_IDS[0]).toBe(DEFAULT_SHIP_ID);
+    expect(isIdentity(shipRules(getShip(DEFAULT_SHIP_ID)))).toBe(true);
+    // IDs únicos; getShipOrDefault nunca quebra.
+    expect(new Set(SHIP_IDS).size).toBe(SHIP_IDS.length);
+    expect(getShipOrDefault('___').id).toBe(DEFAULT_SHIP_ID);
   });
 
   it('as conquistas iniciais são válidas e cobrem os 4 tipos de condição (P6-02-01)', () => {

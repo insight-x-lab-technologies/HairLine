@@ -87,4 +87,21 @@ describe('Replay — gravação + verificação por re-simulação (docs/02 §7)
     const { mods: _omit, ...noMods } = replay;
     expect(verifyReplay(noMods).ok).toBe(false);
   });
+
+  it('replay com classe de nave grava o shipId e re-simula corretamente (P6-04)', () => {
+    const sim = new Simulation({ seed: 4242, mode: 'endless', shipId: 'glaive' });
+    const rec = new ReplayRecorder(4242, 'endless', undefined, undefined, 'glaive');
+    for (const inp of inputs) {
+      rec.record(inp);
+      sim.tick(inp);
+    }
+    const replay = rec.finalize(sim);
+    expect(replay.shipId).toBe('glaive');
+    expect(verifyReplay(replay).ok).toBe(true);
+    // Sem o shipId, a re-simulação parte da nave default e NÃO bate (anti-cheat).
+    const { shipId: _omit, ...noShip } = replay;
+    expect(verifyReplay(noShip).ok).toBe(false);
+    // Adulterar para outra classe também reprova.
+    expect(verifyReplay({ ...replay, shipId: 'bulwark' }).ok).toBe(false);
+  });
 });

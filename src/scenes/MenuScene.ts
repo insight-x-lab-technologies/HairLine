@@ -8,7 +8,7 @@ import { getHaptics } from '../services/HapticsService';
 import { dailySeed, dayKey } from '../services/DailySeed';
 import { getIdentity } from '../services/PlayerIdentity';
 import { pickWeeklyModifiers, combineMods, weeklySeed, weekKey } from '../systems/Modifiers';
-import { STAGE_IDS } from '../content';
+import { STAGE_IDS, getShips, getShipOrDefault, DEFAULT_SHIP_ID } from '../content';
 import { stagePayload, stageRows } from '../ui/stageSelect';
 import type { GameSceneData } from './GameScene';
 
@@ -17,6 +17,9 @@ import type { GameSceneData } from './GameScene';
  * e Desafio Diário (mesma seed para todos no dia — docs/04 Fase 3).
  */
 export class MenuScene extends Phaser.Scene {
+  /** Rótulo "NAVE: …" no menu; atualizado quando a escolha muda (P6-04). */
+  private shipLabel?: Phaser.GameObjects.Text;
+
   constructor() {
     super(SceneKeys.Menu);
   }
@@ -30,6 +33,20 @@ export class MenuScene extends Phaser.Scene {
 
     const best = getSave().getBestScore();
     if (best > 0) neonText(this, cx, cy - 64, `recorde  ${best}`, 24, '#ffd166');
+
+    // Classe de nave (P6-04): muda regras de jogo (não é cosmético). Toca para
+    // escolher; o Diário ignora a escolha (força a default, ranking justo).
+    this.shipLabel = neonText(
+      this,
+      cx,
+      cy - 28,
+      this.shipLabelText(),
+      22,
+      '#a78bfa',
+    ).setInteractive({
+      useHandCursor: true,
+    });
+    this.shipLabel.on('pointerdown', () => this.showShips());
 
     const endlessBtn = neonText(this, cx, cy + 16, '▶ ENDLESS', 36, '#0bd3c6').setInteractive({
       useHandCursor: true,
@@ -178,9 +195,69 @@ export class MenuScene extends Phaser.Scene {
     back.on('pointerdown', () => overlay.destroy());
   }
 
-  /** Inicia uma run (gesto satisfaz autoplay do áudio). */
+  /** Classe de nave escolhida (resolvida contra o roster; default se inválida). */
+  private selectedShip(): ReturnType<typeof getShipOrDefault> {
+    return getShipOrDefault(getSave().getSelectedShipId() ?? undefined);
+  }
+
+  private shipLabelText(): string {
+    return `✈ NAVE: ${this.selectedShip().name}`;
+  }
+
+  /**
+   * Seletor de classe de nave (P6-04): overlay listando o roster com a escolha
+   * atual marcada e o trade-off de cada uma. Tocar seleciona, persiste e fecha.
+   * São sidegrades (sem desbloqueio) — todas tocáveis.
+   */
+  private showShips(): void {
+    const cx = VIRTUAL_WIDTH / 2;
+    const overlay = this.add.container(0, 0).setDepth(100);
+    const bg = this.add
+      .rectangle(cx, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 0x05060a, 0.97)
+      .setInteractive();
+    overlay.add(bg);
+    overlay.add(neonText(this, cx, 150, 'NAVE', 48, '#a78bfa'));
+    overlay.add(neonText(this, cx, 200, 'regras diferentes, não mais fortes', 18, '#5a6b7a'));
+
+    const current = getSave().getSelectedShipId() ?? DEFAULT_SHIP_ID;
+    getShips().forEach((s, i) => {
+      const y = 300 + i * 150;
+      const chosen = s.id === current || (current === DEFAULT_SHIP_ID && s.default === true);
+      const label = neonText(
+        this,
+        cx,
+        y,
+        `${chosen ? '▶' : '·'} ${s.name}`,
+        36,
+        chosen ? '#ffd166' : '#9af7ef',
+      ).setInteractive({ useHandCursor: true });
+      const desc = neonText(this, cx, y + 40, s.desc, 16, '#5a6b7a');
+      desc.setWordWrapWidth(VIRTUAL_WIDTH - 120);
+      overlay.add(label);
+      overlay.add(desc);
+      label.on('pointerdown', () => {
+        getSave().setSelectedShipId(s.id);
+        this.shipLabel?.setText(this.shipLabelText());
+        overlay.destroy();
+      });
+    });
+
+    const back = neonText(this, cx, VIRTUAL_HEIGHT - 90, '‹ VOLTAR', 28, '#ff5d8f').setInteractive({
+      useHandCursor: true,
+    });
+    overlay.add(back);
+    back.on('pointerdown', () => overlay.destroy());
+  }
+
+  /**
+   * Inicia uma run (gesto satisfaz autoplay do áudio). Injeta a classe de nave
+   * escolhida, EXCETO no Diário, que força a default (mesma seed E mesmas regras
+   * para todos — ranking justo, P6-04). A default é omitida (≡ identidade).
+   */
   private start(data: GameSceneData): void {
     getAudio().start();
-    this.scene.start(SceneKeys.Game, data);
+    const shipId = data.daily ? DEFAULT_SHIP_ID : (data.shipId ?? this.selectedShip().id);
+    const payload: GameSceneData = shipId !== DEFAULT_SHIP_ID ? { ...data, shipId } : data;
+    this.scene.start(SceneKeys.Game, payload);
   }
 }

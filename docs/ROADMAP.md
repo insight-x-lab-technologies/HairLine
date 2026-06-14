@@ -22,8 +22,8 @@
 | 6–9+ | Meta-jogo → visão | ⬜ a fazer |
 
 Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 5 ondas
-autorais, 3 estágios curados**.
-Testes: **338 passando** (47 arquivos). Ver `TEST_STRATEGY.md`.
+autorais, 3 estágios curados, 3 classes de nave**.
+Testes: **374 passando** (50 arquivos). Ver `TEST_STRATEGY.md`.
 
 ---
 
@@ -183,9 +183,22 @@ Testes: **338 passando** (47 arquivos). Ver `TEST_STRATEGY.md`.
   vazio amigável. Helpers puros `src/ui/stats.ts` (ticks⇒mm:ss, data curta).
   Ver TD-24, `tests/SaveService.test.ts`, `tests/stats-ui.test.ts`. Issues:
   `docs/issues/P6-03-*.md`.
-- ⬜ **P6-04** Naves com regras de jogo distintas (diferentes, não mais fortes).
+- ✅ **P6-04** Naves com regras de jogo distintas (diferentes, não mais fortes).
+  **P6-04-01 ✅** (classes de nave): `ships.json` + módulo puro `sim/Ships.ts`
+  (regras = multiplicadores sobre player/autofire/combat + `livesDelta`;
+  `applyShipToPlayer/AutoFire/Combat`, `validateShips`). A classe é **entrada
+  determinística**: `SimulationOptions.shipId`, gravada no `Replay`/`verifyReplay`
+  e dobrada na linhagem do `hashState()` (só a nave **não-default**; a default é
+  **identidade** ⇒ replays/Diário antigos byte-idênticos). 3 naves (vanguard=
+  baseline, glaive=cadência alta/2 vidas/graze curto, bulwark=4 vidas/graze
+  largo/lenta). Sem desbloqueio (sidegrades). Seleção persistida (`SaveService`)
+  + seletor no Menu; **o Diário força a default** (mesma seed E mesmas regras
+  para todos). **Decisão:** sem spec prévia — escopo registrado em
+  `docs/issues/P6-04-01-naves-com-regras.md`; balanceamento é tuning de JSON +
+  teste manual. Ver TD-25, `tests/Ships.test.ts`,
+  `tests/{Simulation,Replay,content}.test.ts`.
 - ⬜ **P6-05** Curva de maestria visível (rankings de habilidade).
-
+- ⬜ **P6-06** New Game Home Redisign. A professional new home with a world class look and feel
 ---
 
 ## FASE 7 — Monetização leve ⬜
