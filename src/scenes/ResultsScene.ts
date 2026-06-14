@@ -9,11 +9,14 @@ import { shareCard, type ShareData } from '../services/ShareCard';
 import { shareResult } from '../services/ShareImage';
 import { verifyReplay, type Replay } from '../sim/Replay';
 import type { GameMode } from '../sim/types';
-import { getStage, STAGE_IDS } from '../content';
+import { getStage, STAGE_IDS, getAchievementDefs } from '../content';
+import { recordAndUnlock, type RunSummary } from '../services/Achievements';
 
 interface ResultsData {
   score?: number;
   graze?: number;
+  kills?: number;
+  livesLost?: number;
   ticks?: number;
   level?: number;
   won?: boolean;
@@ -43,6 +46,22 @@ export class ResultsScene extends Phaser.Scene {
 
     const isRecord = getSave().setBestScore(score);
     const best = getSave().getBestScore();
+
+    // P6-02-01: registra a run no perfil e desbloqueia conquistas (ponto
+    // canônico de fim de run). `data.mode` ausente ⇒ entrada sem run real.
+    // O retorno (IDs novos) será anunciado pela UI da P6-02-02 (toasts).
+    if (data.mode !== undefined) {
+      const run: RunSummary = {
+        mode: data.mode,
+        daily: data.daily ?? false,
+        won: data.won ?? false,
+        score,
+        graze: data.graze ?? 0,
+        kills: data.kills ?? 0,
+        livesLost: data.livesLost ?? 0,
+      };
+      recordAndUnlock(getSave(), getAchievementDefs(), run);
+    }
 
     neonText(this, cx, 250, `SCORE  ${score}`, 40, '#ffd166');
     neonText(this, cx, 300, `GRAZE  ${data.graze ?? 0}   NÍVEL ${data.level ?? 1}`, 24, '#0bd3c6');

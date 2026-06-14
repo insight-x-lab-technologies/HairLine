@@ -19,6 +19,9 @@ export interface CombatConfig {
 
 export class GameState {
   lives: number;
+  /** Vidas iniciais da run (constante). Permite derivar "tomou dano?" pós-run
+   * (P6-02-01) sem tocar na lógica nem no `hashState`. */
+  readonly startLives: number;
   score = 0;
   focus = 0;
   grazeCount = 0;
@@ -31,10 +34,16 @@ export class GameState {
 
   constructor(private readonly cfg: CombatConfig) {
     this.lives = cfg.lives;
+    this.startLives = cfg.lives;
   }
 
   get invulnerable(): boolean {
     return this.invulnTimer > 0;
+  }
+
+  /** Teto do medidor de Foco — para a barra do HUD (P5-02-03). */
+  get focusMax(): number {
+    return this.cfg.focusMax;
   }
 
   /** Graze: carrega Foco (com teto), conta e pontua. */

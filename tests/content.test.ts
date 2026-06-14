@@ -5,6 +5,8 @@ import {
   getBoss,
   getWave,
   getStage,
+  getCosmetics,
+  getAchievementDefs,
   validateBossDef,
   validateStageDef,
   PATTERN_IDS,
@@ -13,6 +15,8 @@ import {
   WAVE_IDS,
   STAGE_IDS,
 } from '../src/content';
+import { validateCosmetics, getDefault } from '../src/services/Cosmetics';
+import { validateAchievements } from '../src/services/Achievements';
 import type { BossDef, StageDef } from '../src/content/types';
 
 describe('content — integridade dos dados (docs/02 §3.2)', () => {
@@ -143,5 +147,27 @@ describe('content — integridade dos dados (docs/02 §3.2)', () => {
 
   it('a ordem de STAGE_IDS é o contrato de desbloqueio (stage-001 primeiro) — P4-04b-04', () => {
     expect(STAGE_IDS[0]).toBe('stage-001');
+  });
+
+  it('o catálogo de cosméticos inicial é válido (P6-01-01)', () => {
+    const c = getCosmetics();
+    expect(() => validateCosmetics(c)).not.toThrow();
+    // ~3 naves, ~4 cores de tiro, ~2 trilhas — pelo menos um default por tipo.
+    expect(c.ships.length).toBeGreaterThanOrEqual(3);
+    expect(c.shotColors.length).toBeGreaterThanOrEqual(4);
+    expect(c.music.length).toBeGreaterThanOrEqual(2);
+    expect(getDefault(c, 'ship').id).toBe('ship-default');
+    expect(getDefault(c, 'shotColor').id).toBe('shot-default');
+    expect(getDefault(c, 'music').id).toBe('music-default');
+  });
+
+  it('as conquistas iniciais são válidas e cobrem os 4 tipos de condição (P6-02-01)', () => {
+    const defs = getAchievementDefs();
+    expect(() => validateAchievements(defs)).not.toThrow();
+    expect(defs.length).toBeGreaterThanOrEqual(10);
+    const types = new Set(defs.map((d) => d.condition.type));
+    expect(types).toEqual(new Set(['totalAtLeast', 'runStat', 'bestAtLeast', 'winMode']));
+    // IDs únicos (contrato imutável referenciado por cosméticos).
+    expect(new Set(defs.map((d) => d.id)).size).toBe(defs.length);
   });
 });

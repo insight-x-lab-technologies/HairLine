@@ -4,6 +4,7 @@ import { VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '../config/layout';
 import { neonText, pulse } from '../ui/neonText';
 import { getAudio } from '../services/AudioService';
 import { getSave } from '../services/SaveService';
+import { getHaptics } from '../services/HapticsService';
 import { dailySeed, dayKey } from '../services/DailySeed';
 import { getIdentity } from '../services/PlayerIdentity';
 import { pickWeeklyModifiers, combineMods, weeklySeed, weekKey } from '../systems/Modifiers';
@@ -97,6 +98,26 @@ export class MenuScene extends Phaser.Scene {
         nameBtn.setText(`nome: ${me.name}  ✎`);
       }
     });
+
+    // Toggle de vibração (P5-04-03): exibido só onde a API existe (Android).
+    const haptics = getHaptics(getSave());
+    if (haptics.isSupported) {
+      const label = (): string => `📳 ${haptics.isEnabled ? 'ON' : 'OFF'}`;
+      const hapticBtn = neonText(
+        this,
+        cx,
+        VIRTUAL_HEIGHT - 40,
+        label(),
+        18,
+        '#5a6b7a',
+      ).setInteractive({
+        useHandCursor: true,
+      });
+      hapticBtn.on('pointerdown', () => {
+        haptics.toggle();
+        hapticBtn.setText(label());
+      });
+    }
   }
 
   /**

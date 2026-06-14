@@ -1,0 +1,65 @@
+{
+  "_nota": "P6-02-01. IDs são CONTRATO imutável (cosméticos os referenciam; desbloqueio é histórico do jogador). Ordem do array = ordem de exibição na galeria (P6-02-02). desc = como desbloquear (fonte única do texto da condição).",
+  "achievements": [
+    {
+      "id": "first-flight",
+      "title": "Primeiro voo",
+      "desc": "Jogue sua primeira run.",
+      "condition": { "type": "totalAtLeast", "stat": "totalRuns", "value": 1 }
+    },
+    {
+      "id": "first-win",
+      "title": "Primeira vitória",
+      "desc": "Vença uma run em qualquer modo.",
+      "condition": { "type": "winMode", "mode": "any" }
+    },
+    {
+      "id": "flow-200",
+      "title": "Fluxo",
+      "desc": "Faça 200 grazes em uma única run.",
+      "condition": { "type": "runStat", "stat": "graze", "value": 200 }
+    },
+    {
+      "id": "flawless",
+      "title": "Impecável",
+      "desc": "Vença uma run sem perder nenhuma vida.",
+      "condition": { "type": "winMode", "mode": "any", "noDamage": true }
+    },
+    {
+      "id": "grazer-1k",
+      "title": "Roçador",
+      "desc": "Acumule 1.000 grazes no total.",
+      "condition": { "type": "totalAtLeast", "stat": "totalGraze", "value": 1000 }
+    },
+    {
+      "id": "grazer-10k",
+      "title": "Ímã de balas",
+      "desc": "Acumule 10.000 grazes no total.",
+      "condition": { "type": "totalAtLeast", "stat": "totalGraze", "value": 10000 }
+    },
+    {
+      "id": "hunter-1k",
+      "title": "Caçador",
+      "desc": "Abata 1.000 inimigos no total.",
+      "condition": { "type": "totalAtLeast", "stat": "totalKills", "value": 1000 }
+    },
+    {
+      "id": "boss-tamer",
+      "title": "Domador de chefes",
+      "desc": "Vença o Boss Rush.",
+      "condition": { "type": "winMode", "mode": "bossrush" }
+    },
+    {
+      "id": "daily-regular",
+      "title": "Frequentador",
+      "desc": "Jogue um Desafio Diário.",
+      "condition": { "type": "totalAtLeast", "stat": "totalDaily", "value": 1 }
+    },
+    {
+      "id": "endless-50k",
+      "title": "Veterano do Endless",
+      "desc": "Alcance 50.000 pontos no Endless.",
+      "condition": { "type": "bestAtLeast", "mode": "endless", "value": 50000 }
+    }
+  ]
+}

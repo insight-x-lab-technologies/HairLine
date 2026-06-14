@@ -45,4 +45,22 @@ describe('SaveService — persistência local (docs/02 §8)', () => {
     expect(s.setBestScore(300)).toBe(true);
     expect(s.getBestScore()).toBe(300);
   });
+
+  it('seleção de cosméticos começa vazia e persiste (P6-01-01)', () => {
+    const store = fakeStore();
+    const s = new SaveService(store);
+    expect(s.getLoadoutSelection()).toEqual({});
+    s.setLoadoutSelection({ shipId: 'ship-prism', shotColorId: 'shot-ion' });
+    // nova instância sobre o mesmo store mantém a seleção
+    expect(new SaveService(store).getLoadoutSelection()).toEqual({
+      shipId: 'ship-prism',
+      shotColorId: 'shot-ion',
+    });
+  });
+
+  it('seleção de cosméticos corrompida cai em vazio (P6-01-01)', () => {
+    const store = fakeStore();
+    store.setItem('hairline.loadout.v1', '{nao é json');
+    expect(new SaveService(store).getLoadoutSelection()).toEqual({});
+  });
 });

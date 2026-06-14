@@ -1,6 +1,7 @@
 import type { BulletPool } from '../entities/BulletPool';
 import type { GameState } from '../sim/GameState';
 import type { PlayerHitbox } from './CollisionSystem';
+import type { FxEmitter } from '../sim/FxEvents';
 
 /**
  * GrazeSystem — a mecânica central (docs/01 §4.1): passar PERTO de uma bala
@@ -19,6 +20,7 @@ export function updateGraze(
   enemyBullets: BulletPool,
   state: GameState,
   grazeMarginPx: number,
+  fx?: FxEmitter,
 ): void {
   enemyBullets.forEachActive((b) => {
     if (b.grazed) return;
@@ -30,6 +32,9 @@ export function updateGraze(
     if (d2 > hitDist * hitDist && d2 <= grazeDist * grazeDist) {
       b.grazed = true;
       state.addGraze();
+      // Evento de FX na posição da bala raspada (P5-02-01) — decorativo, fora
+      // do hashState(). A bala segue ativa (o destaque visual lê b.grazed).
+      fx?.emit('graze', b.x, b.y);
     }
   });
 }

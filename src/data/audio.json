@@ -1,0 +1,29 @@
+{
+  "music": {
+    "rhythmLevel": 2,
+    "dangerLives": 1,
+    "layers": { "base": 1, "rhythm": 0.5, "tension": 0.6, "danger": 0.45 },
+    "rampMs": { "in": 1200, "out": 2000 }
+  },
+  "sfx": {
+    "maxVoices": 8,
+    "voiceWindowMs": 180,
+    "perCueMax": { "kill": 4, "graze": 3 },
+    "priority": {
+      "hit": 4,
+      "gameover": 4,
+      "victory": 4,
+      "bossentry": 3,
+      "pulse": 3,
+      "bossshield": 3,
+      "bossteleport": 2,
+      "focusready": 2,
+      "kill": 1,
+      "graze": 0
+    },
+    "pitchVar": 0.04,
+    "gainVar": 0.1,
+    "duck": { "amount": 0.5, "durationMs": 300 },
+    "duckCues": ["hit", "gameover", "victory"]
+  }
+}

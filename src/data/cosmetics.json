@@ -1,0 +1,75 @@
+{
+  "_nota": "P6-01-01. Cosmético NUNCA afeta jogabilidade (só render/áudio). Cores de tiro escolhidas para NÃO confundir com balas inimigas (legibilidade é sagrada). Catálogo inicial usa só default/totalAtLeast — desbloqueio por conquista (achievement) entra quando P6-02-01 existir.",
+  "ships": [
+    {
+      "id": "ship-default",
+      "kind": "ship",
+      "title": "Padrão",
+      "shape": "arrow",
+      "color": "#0bd3c6",
+      "unlock": { "type": "default" }
+    },
+    {
+      "id": "ship-prism",
+      "kind": "ship",
+      "title": "Prisma",
+      "shape": "diamond",
+      "color": "#a78bfa",
+      "unlock": { "type": "totalAtLeast", "stat": "totalGraze", "value": 500 }
+    },
+    {
+      "id": "ship-comet",
+      "kind": "ship",
+      "title": "Cometa",
+      "shape": "hex",
+      "color": "#f59e0b",
+      "unlock": { "type": "totalAtLeast", "stat": "totalKills", "value": 300 }
+    }
+  ],
+  "shotColors": [
+    {
+      "id": "shot-default",
+      "kind": "shotColor",
+      "title": "Padrão",
+      "color": "#ffe066",
+      "unlock": { "type": "default" }
+    },
+    {
+      "id": "shot-ion",
+      "kind": "shotColor",
+      "title": "Íon",
+      "color": "#22d3ee",
+      "unlock": { "type": "totalAtLeast", "stat": "bestScore", "value": 5000 }
+    },
+    {
+      "id": "shot-rose",
+      "kind": "shotColor",
+      "title": "Rosa",
+      "color": "#fb7185",
+      "unlock": { "type": "totalAtLeast", "stat": "totalGraze", "value": 1500 }
+    },
+    {
+      "id": "shot-lime",
+      "kind": "shotColor",
+      "title": "Lima",
+      "color": "#a3e635",
+      "unlock": { "type": "totalAtLeast", "stat": "totalRuns", "value": 50 }
+    }
+  ],
+  "music": [
+    {
+      "id": "music-default",
+      "kind": "music",
+      "title": "Padrão",
+      "preset": "default",
+      "unlock": { "type": "default" }
+    },
+    {
+      "id": "music-pulse",
+      "kind": "music",
+      "title": "Pulso",
+      "preset": "pulse",
+      "unlock": { "type": "totalAtLeast", "stat": "totalRuns", "value": 25 }
+    }
+  ]
+}

@@ -13,6 +13,15 @@ import { readSafeAreaInsets } from '../services/SafeArea';
 import { hudPadding, type HudPadding } from '../ui/hudLayout';
 import { shapePoints } from '../ui/shapes';
 import { neonText } from '../ui/neonText';
+import { ParticlePool } from '../ui/ParticlePool';
+import { hitStopDurationFor, applyHitStop, tickHitStop, isFrozen } from '../ui/HitStop';
+import { musicTargets } from '../services/MusicDirector';
+import { getHaptics } from '../services/HapticsService';
+import { getSave } from '../services/SaveService';
+import { getEffects, getAudioConfig } from '../content';
+import type { EffectsConfig } from '../content/types';
+import type { FxEventType } from '../sim/FxEvents';
+import playerData from '../data/player.json';
 
 /**
  * GameScene — camada de APRESENTAÇÃO do jogo. Toda a lógica vive na simulação
@@ -57,6 +66,13 @@ export class GameScene extends Phaser.Scene {
   private bossGfx!: Phaser.GameObjects.Graphics;
   private enemyBulletGfx!: Phaser.GameObjects.Graphics;
   private fxGfx!: Phaser.GameObjects.Graphics;
+  /** Anel de graze na nave (P5-02-02), camada baixa para não cobrir balas. */
+  private ringGfx!: Phaser.GameObjects.Graphics;
+  /** Partículas decorativas de impacto/kill/graze (P5-01-02/03, P5-02-01). */
+  private particlesGfx!: Phaser.GameObjects.Graphics;
+  private particles!: ParticlePool;
+  /** Barra de Foco no HUD (P5-02-03). */
+  private focusGfx!: Phaser.GameObjects.Graphics;
   private hud!: Phaser.GameObjects.Text;
   private pauseBtn!: Phaser.GameObjects.Text;
   private muteBtn!: Phaser.GameObjects.Text;
@@ -87,6 +103,21 @@ export class GameScene extends Phaser.Scene {
   private readonly target = { x: VIRTUAL_WIDTH / 2, y: VIRTUAL_HEIGHT * 0.78 };
   private focus = false;
 
+  /** Config de efeitos resolvida uma vez (P5-01-01) — nada de lookup no loop. */
+  private readonly effects: EffectsConfig = getEffects();
+  /** Cores de partícula pré-convertidas (hex→int) por tipo de evento. */
+  private particleColors: Partial<Record<FxEventType, number>> = {};
+  /** Cache hex→int para cores herdadas do evento (inimigo/chefe). */
+  private readonly colorCache = new Map<string, number>();
+  /** Hit-stop pendente em ms (P5-01-04): enquanto >0, a cena pula o advance. */
+  private hitStopMs = 0;
+  /** Ping do anel de graze, em ticks restantes (P5-02-02). */
+  private grazeRingPing = 0;
+  /** Blip da barra de Foco, em ticks restantes (P5-02-03). */
+  private focusBlip = 0;
+  /** Foco do frame anterior, para detectar ganho (blip). */
+  private prevFocus = 0;
+
   constructor() {
     super(SceneKeys.Game);
   }
@@ -94,12 +125,20 @@ export class GameScene extends Phaser.Scene {
   create(data: GameSceneData = {}): void {
     this.drawField();
     // Camadas únicas redesenhadas por frame a partir dos pools da sim
-    // (sem criar GameObjects no loop). Ordem: inimigos → tiros → balas inimigas.
+    // (sem criar GameObjects no loop). Ordem de empilhamento (baixo→alto):
+    // anel de graze → inimigos → tiros → balas → fx do pulso → partículas.
+    this.ringGfx = this.add.graphics(); // sob as balas (legibilidade)
     this.enemyGfx = this.add.graphics();
     this.bossGfx = this.add.graphics();
     this.shotsGfx = this.add.graphics();
     this.enemyBulletGfx = this.add.graphics();
     this.fxGfx = this.add.graphics();
+    this.particlesGfx = this.add.graphics(); // faíscas acima das balas
+    this.focusGfx = this.add.graphics();
+    this.particles = new ParticlePool(512, 0x5eed);
+    this.cacheParticleColors();
+    // Serviço de haptics (P5-04-03): preferência persistida no SaveService.
+    getHaptics(getSave());
     this.ship = this.makeShip();
 
     // --- Núcleo determinístico -------------------------------------------
@@ -130,6 +169,7 @@ export class GameScene extends Phaser.Scene {
       this.sim.tick(input);
     });
     this.prevAudio = snapshotOf(this.sim);
+    this.prevFocus = this.sim.state.focus;
     // Áudio só inicia após um gesto (políticas de autoplay) + trilha em loop.
     getAudio().start();
     getAudio().startMusic();
@@ -189,11 +229,16 @@ export class GameScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.layoutHud, this);
 
     // Ao pausar/retomar: solta/recupera o input e descarta o delta acumulado.
-    this.events.on(Phaser.Scenes.Events.PAUSE, () => this.inputSvc.detach());
+    // Hit-stop tem precedência zero diante da pausa: zera para não vazar (P5-01-04).
+    this.events.on(Phaser.Scenes.Events.PAUSE, () => {
+      this.inputSvc.detach();
+      this.hitStopMs = 0;
+    });
     this.events.on(Phaser.Scenes.Events.RESUME, () => {
       this.inputSvc.attach();
       this.loop.reset();
       this.justResumed = true;
+      this.hitStopMs = 0;
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.inputSvc.detach();
@@ -249,11 +294,17 @@ export class GameScene extends Phaser.Scene {
   }
 
   override update(_time: number, deltaMs: number): void {
-    // 1) Movimento contínuo por teclado é integrado pelo InputService.
+    // 1) Movimento contínuo por teclado é integrado pelo InputService (segue
+    //    rodando mesmo no hit-stop, para o arrasto não dar salto ao retomar).
     this.inputSvc.update(deltaMs / 1000);
     // 2) A simulação avança em passos FIXOS, independente deste FPS de render.
-    //    No 1º frame após retomar da pausa, descarta o delta gigante acumulado.
-    if (this.justResumed) {
+    //    HIT-STOP (P5-01-04): enquanto congelado, NÃO alimenta loop.advance e
+    //    NÃO acumula o tempo (sem catch-up de ticks). No 1º frame após retomar
+    //    da pausa, descarta o delta gigante acumulado.
+    const frozen = isFrozen(this.hitStopMs);
+    if (frozen) {
+      this.hitStopMs = tickHitStop(this.hitStopMs, deltaMs);
+    } else if (this.justResumed) {
       this.justResumed = false;
     } else {
       this.loop.advance(deltaMs);
@@ -261,16 +312,35 @@ export class GameScene extends Phaser.Scene {
     // 2b) Fundo estelar (parallax).
     this.updateBackground(deltaMs);
 
-    // 2c) Áudio + feedback de dano: sonoriza e reage aos eventos detectados.
+    // 2c) Áudio + haptics + feedback de dano: sonoriza e reage aos eventos.
     const curAudio = snapshotOf(this.sim);
     const audio = getAudio();
+    const haptics = getHaptics();
     for (const cue of diffCues(this.prevAudio, curAudio)) {
       audio.play(cue);
       this.reactToCue(cue);
+      haptics.vibrate(cue);
     }
     this.prevAudio = curAudio;
 
-    // 2d) Progresso do estágio: anúncio de seção + indicador "n/m".
+    // 2d) Trilha dinâmica por intensidade (P5-04-01).
+    this.updateMusic();
+
+    // 2e) Eventos de FX com posição → partículas + hit-stop (P5-01-03/P5-02-01).
+    //     Só quando NÃO congelado: o buffer é do último tick avançado; durante
+    //     o hit-stop as partículas congelam junto (coerência visual).
+    if (!frozen) {
+      this.consumeFxEvents();
+      this.particles.update(deltaMs / this.sim.fixedDeltaMs);
+      if (this.grazeRingPing > 0) this.grazeRingPing--;
+      if (this.focusBlip > 0) this.focusBlip--;
+      // Blip da barra ao ganhar Foco (graze pagando) — P5-02-03.
+      const f = this.sim.state.focus;
+      if (f > this.prevFocus) this.focusBlip = this.effects.focusHud.blipDurationTicks;
+      this.prevFocus = f;
+    }
+
+    // 2f) Progresso do estágio: anúncio de seção + indicador "n/m".
     this.updateStageProgress();
 
     // 3) Render: a nave segue a posição AUTORITATIVA da simulação (a lógica de
@@ -286,9 +356,12 @@ export class GameScene extends Phaser.Scene {
     this.ship.setScale(this.focus ? 0.7 : 1);
     // Pisca a nave (vermelho) enquanto invulnerável — feedback claro de dano.
     const inv = this.sim.state.invulnerable;
-    this.ship.setAlpha(inv ? 0.35 + 0.35 * Math.sin(_time / 35) : 1);
+    const shipAlpha = inv ? 0.35 + 0.35 * Math.sin(_time / 35) : 1;
+    this.ship.setAlpha(shipAlpha);
     // Chama do motor pulsando.
     this.engine.setScale(1, 0.7 + 0.3 * Math.sin(_time / 60));
+    // Anel de graze ao redor da nave (P5-02-02): zona de risco legível.
+    this.drawGrazeRing(player.x, player.y, shipAlpha);
 
     // Inimigos: forma por tipo + glow, girando suavemente.
     this.enemyGfx.clear();
@@ -317,13 +390,22 @@ export class GameScene extends Phaser.Scene {
     });
 
     // Balas inimigas: glow âmbar + núcleo claro (legibilidade do perigo).
+    // Bala já grazeada (P5-02-01) ganha brilho/núcleo extra: "esse risco já paguei".
     this.enemyBulletGfx.clear();
     this.sim.enemyBullets.forEachActive((b) => {
-      this.enemyBulletGfx.fillStyle(0xff7b3d, 0.3).fillCircle(b.x, b.y, b.radius * 2);
-      this.enemyBulletGfx.fillStyle(0xffe08a, 1).fillCircle(b.x, b.y, b.radius);
+      if (b.grazed) {
+        this.enemyBulletGfx.fillStyle(0x9af7ef, 0.28).fillCircle(b.x, b.y, b.radius * 2.6);
+        this.enemyBulletGfx.fillStyle(0xff7b3d, 0.3).fillCircle(b.x, b.y, b.radius * 2);
+        this.enemyBulletGfx.fillStyle(0xffffff, 1).fillCircle(b.x, b.y, b.radius);
+      } else {
+        this.enemyBulletGfx.fillStyle(0xff7b3d, 0.3).fillCircle(b.x, b.y, b.radius * 2);
+        this.enemyBulletGfx.fillStyle(0xffe08a, 1).fillCircle(b.x, b.y, b.radius);
+      }
     });
 
     this.drawReflectFx();
+    this.drawParticles();
+    this.drawFocusBar();
 
     const s = this.sim.state;
     const modLine = this.modLabels.length > 0 ? `\n⚡ ${this.modLabels.join(' · ')}` : '';
@@ -333,6 +415,11 @@ export class GameScene extends Phaser.Scene {
         `inimigos ${this.sim.enemies.activeCount}  balas ${this.sim.enemyBullets.activeCount}  fps ${Math.round(this.game.loop.actualFps)}` +
         modLine,
     );
+
+    // Estado do botão de pulso (P5-02-03): "pronto" acende e pulsa; senão apaga.
+    const ready = s.focus >= this.sim.pulseCost;
+    this.pulseBtn.setColor(ready ? this.effects.focusHud.readyColor : '#5a6b7a');
+    this.pulseBtn.setAlpha(ready ? 0.75 + 0.25 * Math.sin(_time / 120) : 0.4);
   }
 
   /**
@@ -357,27 +444,161 @@ export class GameScene extends Phaser.Scene {
     if (p.kind === 'boss') getAudio().play('bossentry');
   }
 
-  /** Reação visual de câmera aos eventos (clareza de dano, juice). */
+  /**
+   * Reação visual de câmera aos eventos, dirigida por dados (P5-01-01): shake e
+   * flash por cue vêm de `effects.json`. O graze dá o "ping" no anel da nave.
+   */
   private reactToCue(cue: string): void {
     const cam = this.cameras.main;
-    switch (cue) {
-      case 'hit':
-        cam.shake(200, 0.014);
-        cam.flash(160, 255, 60, 80); // flash vermelho = levei dano
-        break;
-      case 'gameover':
-        cam.shake(450, 0.02);
-        cam.flash(300, 255, 40, 60);
-        break;
-      case 'pulse':
-        cam.flash(120, 90, 210, 255);
-        break;
-      case 'victory':
-        cam.flash(300, 120, 255, 230);
-        break;
-      case 'bossshield':
-        cam.flash(160, 90, 200, 240); // escudo quebrou: flash ciano
-        break;
+    const shake = this.effects.shake[cue];
+    if (shake) cam.shake(shake.durationMs, shake.intensity);
+    const flash = this.effects.flash[cue];
+    if (flash) cam.flash(flash.durationMs, flash.r, flash.g, flash.b);
+    if (cue === 'graze') this.grazeRingPing = this.effects.grazeRing.pingDurationTicks;
+  }
+
+  /** Alimenta a trilha dinâmica com o snapshot de intensidade (P5-04-01). */
+  private updateMusic(): void {
+    const boss = this.sim.boss;
+    const targets = musicTargets(
+      {
+        level: this.sim.level,
+        bossActive: boss?.alive ?? false,
+        lives: this.sim.state.lives,
+        gameOver: this.sim.state.gameOver,
+      },
+      getAudioConfig().music,
+    );
+    getAudio().setLayerTargets(targets);
+  }
+
+  /** Pré-converte as cores próprias de cada tipo de partícula (hex→int). */
+  private cacheParticleColors(): void {
+    for (const [type, p] of Object.entries(this.effects.particles)) {
+      if (p.color) this.particleColors[type as FxEventType] = this.colorOf(p.color);
+    }
+  }
+
+  /** hex "#rrggbb" → int, com cache (evita realocar Color no caminho quente). */
+  private colorOf(hex: string): number {
+    const cached = this.colorCache.get(hex);
+    if (cached !== undefined) return cached;
+    const n = Number.parseInt(hex.replace('#', ''), 16) | 0;
+    this.colorCache.set(hex, n);
+    return n;
+  }
+
+  /**
+   * Consome o buffer de eventos de FX do último tick (P5-01-03/P5-02-01):
+   * dispara bursts de partículas (cor própria ou herdada do evento), micro-shake
+   * opcional e acumula o maior hit-stop. Caps por tipo evitam poluição visual em
+   * densidade alta (tempestade de kills/grazes).
+   */
+  private consumeFxEvents(): void {
+    const caps = this.effects.consumeCapsPerFrame;
+    let nShot = 0;
+    let nKill = 0;
+    let nGraze = 0;
+    let hitStopAdd = 0;
+    this.sim.fxEvents.forEach((e) => {
+      // Cap de consumo visual (o contador de graze/score na sim não é afetado).
+      if (e.type === 'shotHit') {
+        if (nShot >= (caps.shotHit ?? Infinity)) return;
+        nShot++;
+      } else if (e.type === 'kill') {
+        if (nKill >= (caps.kill ?? Infinity)) return;
+        nKill++;
+      } else if (e.type === 'graze') {
+        if (nGraze >= (caps.graze ?? Infinity)) return;
+        nGraze++;
+      }
+      const p = this.effects.particles[e.type];
+      if (p) {
+        const color = this.particleColors[e.type] ?? (e.color ? this.colorOf(e.color) : 0xffffff);
+        this.particles.burst({
+          x: e.x,
+          y: e.y,
+          count: p.count,
+          speed: p.speed,
+          lifeTicks: p.lifeTicks,
+          size: p.size,
+          color,
+          ...(p.drag !== undefined ? { drag: p.drag } : {}),
+          ...(p.gravity !== undefined ? { gravity: p.gravity } : {}),
+          ...(p.spreadRad !== undefined ? { spreadRad: p.spreadRad } : {}),
+        });
+        if (p.shake) this.cameras.main.shake(p.shake.durationMs, p.shake.intensity);
+      }
+      const hs = hitStopDurationFor(e.type, this.effects.hitStop);
+      if (hs > hitStopAdd) hitStopAdd = hs;
+    });
+    if (hitStopAdd > 0) {
+      this.hitStopMs = applyHitStop(this.hitStopMs, hitStopAdd, this.effects.hitStop.maxMs);
+    }
+  }
+
+  /** Desenha as partículas vivas (glow barato: fill + alpha). */
+  private drawParticles(): void {
+    const g = this.particlesGfx;
+    g.clear();
+    this.particles.forEachActive((x, y, size, color, alpha) => {
+      g.fillStyle(color, alpha * 0.3).fillCircle(x, y, size * 2);
+      g.fillStyle(color, alpha).fillCircle(x, y, size);
+    });
+  }
+
+  /**
+   * Anel de graze na nave (P5-02-02): circunferência em
+   * `hitboxRadius + grazeMargin`, derivada de player.json/combat.json (não
+   * duplica números). Discreto fora do Foco, claro no Foco; pulsa no graze.
+   */
+  private drawGrazeRing(x: number, y: number, shipAlpha: number): void {
+    const cfg = this.effects.grazeRing;
+    const g = this.ringGfx;
+    g.clear();
+    const ringR = playerData.hitboxRadiusPx + this.sim.grazeMargin;
+    const base = this.focus ? cfg.alphaFocus : cfg.alphaNormal;
+    const ping =
+      this.grazeRingPing > 0 ? cfg.pingAlpha * (this.grazeRingPing / cfg.pingDurationTicks) : 0;
+    // Durante i-frames o anel acompanha o piscar da nave (o dano domina).
+    const alpha = Math.min(1, base + ping) * shipAlpha;
+    if (alpha <= 0.01) return;
+    const color = this.colorOf(cfg.color);
+    g.lineStyle(
+      cfg.lineWidth + 1.5 * (ping > 0 ? this.grazeRingPing / cfg.pingDurationTicks : 0),
+      color,
+      alpha,
+    ).strokeCircle(x, y, ringR);
+  }
+
+  /**
+   * Barra de Foco no HUD (P5-02-03): preenchimento = focus/focusMax, marca no
+   * custo do pulso, cor de "pronto" quando focus ≥ pulseCost, blip ao ganhar.
+   */
+  private drawFocusBar(): void {
+    const cfg = this.effects.focusHud;
+    const g = this.focusGfx;
+    g.clear();
+    const s = this.sim.state;
+    const focusMax = this.sim.state.focusMax;
+    const frac = focusMax > 0 ? Math.min(1, s.focus / focusMax) : 0;
+    const ready = s.focus >= this.sim.pulseCost;
+    const w = cfg.width;
+    const h = cfg.height;
+    const x = VIRTUAL_WIDTH / 2 - w / 2;
+    const y = this.pulseBtn.y - 44;
+    g.fillStyle(this.colorOf(cfg.emptyColor), 1).fillRect(x, y, w, h);
+    const fill = this.colorOf(ready ? cfg.readyColor : cfg.fillColor);
+    g.fillStyle(fill, 1).fillRect(x, y, w * frac, h);
+    // Blip: brilho curto extra no preenchimento ao ganhar Foco.
+    if (this.focusBlip > 0) {
+      const a = 0.4 * (this.focusBlip / cfg.blipDurationTicks);
+      g.fillStyle(fill, a).fillRect(x, y - 3, w * frac, h + 6);
+    }
+    // Marca no ponto de custo do pulso (se for atingível antes do teto).
+    if (this.sim.pulseCost < focusMax) {
+      const mx = x + w * (this.sim.pulseCost / focusMax);
+      g.fillStyle(this.colorOf(cfg.markColor), 0.9).fillRect(mx - 1, y - 2, 2, h + 4);
     }
   }
 
@@ -408,9 +629,7 @@ export class GameScene extends Phaser.Scene {
 
     // Núcleo invulnerável enquanto há partes vivas (P4-02b-04): aro tracejado.
     if (sys && !sys.coreVulnerable) {
-      this.bossGfx
-        .lineStyle(2, 0x6cf0ff, 0.5)
-        .strokeCircle(boss.x, boss.y, boss.radius + 7);
+      this.bossGfx.lineStyle(2, 0x6cf0ff, 0.5).strokeCircle(boss.x, boss.y, boss.radius + 7);
     }
 
     // Partes destrutíveis (P4-02b-04): pods neon presos ao corpo, com dano.
@@ -451,7 +670,7 @@ export class GameScene extends Phaser.Scene {
     this.fxGfx.clear();
     const fx = this.sim.lastReflect;
     if (!fx) return;
-    const FLASH_TICKS = 18;
+    const FLASH_TICKS = this.effects.reflectFx.durationTicks;
     const age = this.sim.tickCount - fx.tick;
     if (age < 0 || age > FLASH_TICKS) return;
     const t = age / FLASH_TICKS; // 0→1
@@ -540,6 +759,8 @@ export class GameScene extends Phaser.Scene {
     this.scene.start(SceneKeys.Results, {
       score: s.score,
       graze: s.grazeCount,
+      kills: s.kills,
+      livesLost: s.startLives - s.lives,
       ticks: this.sim.tickCount,
       level: this.sim.level + 1,
       won: s.won,

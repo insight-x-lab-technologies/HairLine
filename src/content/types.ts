@@ -162,6 +162,105 @@ export interface BossPhaseDef {
   readonly movement?: BossMovementDef;
 }
 
+/**
+ * Configuração de efeitos de apresentação (P5-01-01): juice de câmera, partículas,
+ * hit-stop, anel de graze, HUD de Foco e haptics. Dados separados de código
+ * (CLAUDE.md §3): tuning de "feel" iterado em JSON, nunca hardcoded na cena.
+ * NUNCA é lido pela simulação (`src/sim/` não conhece este arquivo).
+ */
+export interface ShakeFx {
+  readonly durationMs: number;
+  readonly intensity: number;
+}
+export interface FlashFx {
+  readonly durationMs: number;
+  readonly r: number;
+  readonly g: number;
+  readonly b: number;
+}
+/** Parâmetros de um burst de partículas por tipo de evento (P5-01-02/03). */
+export interface ParticleFx {
+  readonly count: number;
+  readonly speed: number;
+  readonly lifeTicks: number;
+  readonly size: number;
+  /** Fator de atrito por tick (1 = sem atrito; <1 desacelera). */
+  readonly drag?: number;
+  /** Aceleração vertical (px/tick²) decorativa. */
+  readonly gravity?: number;
+  /** Cor própria (hex). Ausente ⇒ herda a cor do evento. */
+  readonly color?: string;
+  /** Abertura do leque (radianos). Ausente ⇒ 2π (radial completo). */
+  readonly spreadRad?: number;
+  /** Micro-shake opcional disparado junto (ex.: kill de chefe). */
+  readonly shake?: ShakeFx;
+}
+export interface EffectsConfig {
+  readonly shake: Readonly<Record<string, ShakeFx>>;
+  readonly flash: Readonly<Record<string, FlashFx>>;
+  readonly reflectFx: { readonly durationTicks: number };
+  readonly particles: Readonly<Record<string, ParticleFx>>;
+  /** Teto de eventos consumidos por frame por tipo (anti-poluição visual). */
+  readonly consumeCapsPerFrame: Readonly<Record<string, number>>;
+  readonly hitStop: {
+    readonly enabled: boolean;
+    readonly maxMs: number;
+    readonly durations: Readonly<Record<string, number>>;
+  };
+  readonly grazeRing: {
+    readonly color: string;
+    readonly coreColor: string;
+    readonly lineWidth: number;
+    readonly alphaNormal: number;
+    readonly alphaFocus: number;
+    readonly pingDurationTicks: number;
+    readonly pingAlpha: number;
+  };
+  readonly focusHud: {
+    readonly width: number;
+    readonly height: number;
+    readonly emptyColor: string;
+    readonly fillColor: string;
+    readonly readyColor: string;
+    readonly markColor: string;
+    readonly blipDurationTicks: number;
+  };
+  readonly haptics: {
+    readonly throttleMs: number;
+    readonly maxPatternMs: number;
+    readonly patterns: Readonly<Record<string, readonly number[]>>;
+  };
+}
+
+/**
+ * Configuração de áudio dirigida por dados (P5-04). `music`: mapeamento
+ * intensidade→camadas para a trilha dinâmica; `sfx`: polifonia/prioridade,
+ * variação e ducking. Apresentação pura — fora da simulação.
+ */
+export interface AudioConfig {
+  readonly music: {
+    readonly rhythmLevel: number;
+    readonly dangerLives: number;
+    readonly layers: {
+      readonly base: number;
+      readonly rhythm: number;
+      readonly tension: number;
+      readonly danger: number;
+    };
+    readonly rampMs: { readonly in: number; readonly out: number };
+  };
+  readonly sfx: {
+    readonly maxVoices: number;
+    readonly voiceWindowMs: number;
+    readonly perCueMax: Readonly<Record<string, number>>;
+    readonly priority: Readonly<Record<string, number>>;
+    readonly pitchVar: number;
+    readonly gainVar: number;
+    readonly duck: { readonly amount: number; readonly durationMs: number };
+    readonly duckCues: readonly string[];
+  };
+}
+
 export interface BossDef {
   readonly id: string;
   readonly hp: number;

@@ -5,6 +5,9 @@
  *
  * Não faz parte da simulação (é estado do jogador, não do jogo determinístico).
  */
+import type { Loadout } from './Cosmetics';
+import type { RunSummary } from './Achievements';
+
 export interface KeyValueStore {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -13,6 +16,16 @@ export interface KeyValueStore {
 const BEST_SCORE_KEY = 'hairline.bestScore';
 /** Bloco de progresso por estágio (P4-04b-04). Versionado para evolução futura. */
 const STAGE_PROGRESS_KEY = 'hairline.stageProgress.v1';
+/** Preferência de vibração (P5-04-03). Default ligado onde a API existe. */
+const HAPTICS_KEY = 'hairline.haptics';
+/** Seleção de cosméticos do jogador (P6-01-01). Parcial; ausência ⇒ defaults. */
+const LOADOUT_KEY = 'hairline.loadout.v1';
+/** Totais acumulados do perfil (P6-02-01). Base mínima — P6-03-01 expande. */
+const PROFILE_TOTALS_KEY = 'hairline.profile.totals.v1';
+/** Melhor pontuação por modo (P6-02-01). Chaves: endless/stage/bossrush/daily. */
+const PROFILE_BEST_KEY = 'hairline.profile.best.v1';
+/** Conquistas desbloqueadas (P6-02-01): { [id]: dataIso }. Histórico do jogador. */
+const ACHIEVEMENTS_KEY = 'hairline.achievements.v1';
 
 /** Progresso persistido de um estágio: concluído? melhor pontuação? */
 export interface StageRecord {
@@ -50,6 +63,131 @@ export class SaveService {
     return true;
   }
 
+  // ---- Preferência de vibração (P5-04-03) -------------------------------
+
+  /** Vibração habilitada? Default true (só vibra de fato onde a API existe). */
+  getHapticsEnabled(): boolean {
+    return this.store.getItem(HAPTICS_KEY) !== '0';
+  }
+
+  /** Persiste a preferência de vibração. */
+  setHapticsEnabled(value: boolean): void {
+    this.store.setItem(HAPTICS_KEY, value ? '1' : '0');
+  }
+
+  // ---- Seleção de cosméticos / loadout (P6-01-01) -----------------------
+
+  /**
+   * Seleção de cosméticos persistida (parcial). Persistência burra: a rejeição
+   * de item bloqueado é da camada de serviço (`Cosmetics.selectCosmetic`); a
+   * resolução para defaults é de `Cosmetics.getLoadout`. Save corrompido ⇒ {}.
+   */
+  getLoadoutSelection(): Partial<Loadout> {
+    const raw = this.store.getItem(LOADOUT_KEY);
+    if (!raw) return {};
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return {};
+      const o = parsed as Record<string, unknown>;
+      const sel: { shipId?: string; shotColorId?: string; musicId?: string } = {};
+      if (typeof o.shipId === 'string') sel.shipId = o.shipId;
+      if (typeof o.shotColorId === 'string') sel.shotColorId = o.shotColorId;
+      if (typeof o.musicId === 'string') sel.musicId = o.musicId;
+      return sel;
+    } catch {
+      return {};
+    }
+  }
+
+  /** Persiste a seleção de cosméticos (parcial). */
+  setLoadoutSelection(selection: Partial<Loadout>): void {
+    this.store.setItem(LOADOUT_KEY, JSON.stringify(selection));
+  }
+
+  // ---- Perfil: totais + conquistas (P6-02-01) ---------------------------
+
+  /** Totais acumulados (runs/graze/kills/wins/daily). Ausentes ⇒ 0. */
+  getProfileTotals(): Record<string, number> {
+    return this.readNumberMap(PROFILE_TOTALS_KEY);
+  }
+
+  /** Melhor pontuação por modo. Ausentes ⇒ 0. */
+  getBestByMode(): Record<string, number> {
+    return this.readNumberMap(PROFILE_BEST_KEY);
+  }
+
+  /**
+   * Registra uma run terminada nos totais/recordes por modo (ponto canônico,
+   * junto do fim de run). Monotônico: totais só sobem, best por modo é máximo.
+   * Não decide conquistas — isso é `Achievements.recordAndUnlock`.
+   */
+  recordRun(run: RunSummary): void {
+    const t = this.getProfileTotals();
+    t.totalRuns = (t.totalRuns ?? 0) + 1;
+    t.totalGraze = (t.totalGraze ?? 0) + Math.max(0, Math.floor(run.graze));
+    t.totalKills = (t.totalKills ?? 0) + Math.max(0, Math.floor(run.kills));
+    t.totalWins = (t.totalWins ?? 0) + (run.won ? 1 : 0);
+    t.totalDaily = (t.totalDaily ?? 0) + (run.daily ? 1 : 0);
+    this.store.setItem(PROFILE_TOTALS_KEY, JSON.stringify(t));
+
+    const best = this.getBestByMode();
+    const score = Math.floor(run.score);
+    for (const key of run.daily ? [run.mode, 'daily'] : [run.mode]) {
+      best[key] = Math.max(best[key] ?? 0, score);
+    }
+    this.store.setItem(PROFILE_BEST_KEY, JSON.stringify(best));
+  }
+
+  /** Mapa de conquistas desbloqueadas { [id]: dataIso }. Corrompido ⇒ {}. */
+  getAchievements(): Record<string, string> {
+    const raw = this.store.getItem(ACHIEVEMENTS_KEY);
+    if (!raw) return {};
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return {};
+      const out: Record<string, string> = {};
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'string') out[k] = v;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Persiste novos desbloqueios. Idempotente: nunca sobrescreve a data de uma
+   * conquista já desbloqueada (desbloqueada é histórico). Conquista removida do
+   * JSON permanece no perfil (não é apagada aqui).
+   */
+  unlockAchievements(ids: readonly string[], dateIso: string): void {
+    const map = this.getAchievements();
+    let changed = false;
+    for (const id of ids) {
+      if (!(id in map)) {
+        map[id] = dateIso;
+        changed = true;
+      }
+    }
+    if (changed) this.store.setItem(ACHIEVEMENTS_KEY, JSON.stringify(map));
+  }
+
+  private readNumberMap(key: string): Record<string, number> {
+    const raw = this.store.getItem(key);
+    if (!raw) return {};
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return {};
+      const out: Record<string, number> = {};
+      for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+        if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+      }
+      return out;
+    } catch {
+      return {};
+    }
+  }
+
   // ---- Progresso por estágio (P4-04b-04) --------------------------------
 
   /** Registro de um estágio (default: não concluído, sem score). */
@@ -73,7 +211,10 @@ export class SaveService {
    * Grava o resultado de uma run de estágio: marca conclusão (monotônica: nunca
    * "desconclui") e sobe o best score se aplicável. Retorna se bateu recorde.
    */
-  recordStageResult(stageId: string, result: { completed: boolean; score: number }): {
+  recordStageResult(
+    stageId: string,
+    result: { completed: boolean; score: number },
+  ): {
     isRecord: boolean;
   } {
     const map = this.readStages();

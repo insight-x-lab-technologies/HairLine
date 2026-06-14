@@ -42,12 +42,18 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   `AudioService` (Web Audio procedural), `SaveService` (recorde), `PlayerIdentity`,
   `DailySeed`, `ShareCard`, `ShareImage`, `LeaderboardService` (Local + Remote).
 - **`src/content/`**: `index.ts` (registro:
-  getPattern/getEnemyDef/getBoss/getWave/getStage + listas de ids, validação de
-  bosses/estágios no load) e `types.ts`. Único ponto de `cast` dos JSON.
+  getPattern/getEnemyDef/getBoss/getWave/getStage/**getEffects/getAudioConfig** +
+  listas de ids, validação de bosses/estágios/**effects/audio** no load) e
+  `types.ts`. Único ponto de `cast` dos JSON.
 - **`src/data/`**: JSON de patterns/enemies/bosses/waves/**stages** +
-  difficulty/player/combat.
+  difficulty/player/combat/**effects/audio**.
 - **`src/scenes/`** (Phaser): Boot, Preload, Menu, Game, Pause, Results.
-- **`src/ui/`**: `neonText`, `shapes` (polígonos), `hudLayout` (safe-areas).
+- **`src/ui/`**: `neonText`, `shapes` (polígonos), `hudLayout` (safe-areas),
+  **`ParticlePool`** (partículas decorativas, sem Phaser) e **`HitStop`** (lógica
+  pura do congelamento). Camada de **FX render-side** (P5): a `GameScene` lê o
+  buffer `Simulation.fxEvents` (decorativo, fora do `hashState`) e dispara
+  partículas/hit-stop; `services/MusicDirector` + `SfxPolicy` (puros) dirigem o
+  áudio dinâmico; `services/HapticsService` faz a vibração.
 - **`src/config/`**: `layout` (virtual 720×1280, 60Hz), `gameConfig`, `sceneKeys`.
 - **`worker/`**: Cloudflare Worker (KV) do ranking — **não deployado**.
 

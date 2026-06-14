@@ -19,6 +19,7 @@ import { StageDirector, type StageProgress } from '../systems/StageDirector';
 import { DifficultySystem, type DifficultyConfig } from '../systems/DifficultySystem';
 import { EndlessSpawnSystem } from '../systems/EndlessSpawnSystem';
 import { GameState, type CombatConfig } from './GameState';
+import { FxEventBuffer } from './FxEvents';
 import { getStage } from '../content';
 import playerData from '../data/player.json';
 import combatData from '../data/combat.json';
@@ -73,11 +74,18 @@ export class Simulation {
   readonly mode: GameMode;
   /** Dica para o render: último pulso refletor ativado (efeito visual). */
   lastReflect: { tick: number; x: number; y: number; radius: number } | null = null;
+  /**
+   * Buffer de eventos de FX do tick corrente (P5-01-03): posições de
+   * impacto/kill/dano/graze para o render disparar partículas/hit-stop.
+   * DECORATIVO: zerado a cada tick e FORA do `hashState()` — replays gravados
+   * continuam válidos.
+   */
+  readonly fxEvents = new FxEventBuffer();
   private readonly rng: Rng;
   private readonly autoFire: AutoFire;
   private readonly difficulty: DifficultySystem;
   private readonly endlessSpawner: EndlessSpawnSystem;
-  private readonly grazeMargin: number;
+  private readonly _grazeMargin: number;
   private readonly reflectCfg: ReflectConfig;
 
   private _tickCount = 0;
@@ -145,12 +153,22 @@ export class Simulation {
       lives: mods.livesOverride ?? baseCombat.lives,
     };
     this.state = new GameState(combat);
-    this.grazeMargin = combat.grazeMarginPx;
+    this._grazeMargin = combat.grazeMarginPx;
     this.reflectCfg = combat;
   }
 
   get tickCount(): number {
     return this._tickCount;
+  }
+
+  /** Margem de graze (px) — para o anel de graze do render (P5-02-02). */
+  get grazeMargin(): number {
+    return this._grazeMargin;
+  }
+
+  /** Custo do pulso refletor — para o limiar "pulso pronto" do HUD (P5-02-03). */
+  get pulseCost(): number {
+    return this.reflectCfg.pulseCost;
   }
 
   /** Nível de dificuldade atual (modo Endless) — para HUD/score. */
@@ -185,6 +203,8 @@ export class Simulation {
    * @param input Intenção abstrata do jogador neste tick (padrão: neutra).
    */
   tick(input: SimInput = NEUTRAL_INPUT): void {
+    // Eventos de FX são por tick: zera o índice no início (não realoca).
+    this.fxEvents.reset();
     // Após o game over a simulação congela (o render decide a transição).
     if (this.state.gameOver) {
       this._tickCount++;
@@ -266,11 +286,11 @@ export class Simulation {
       }
     }
 
-    updateGraze(this.player, this.enemyBullets, this.state, this.grazeMargin);
-    resolveShotsVsEnemies(this.playerShots, this.enemies, this.state);
+    updateGraze(this.player, this.enemyBullets, this.state, this._grazeMargin, this.fxEvents);
+    resolveShotsVsEnemies(this.playerShots, this.enemies, this.state, this.fxEvents);
     const bossSys = this.activeBossSystem;
     if (bossSys && bossSys.boss.alive) {
-      resolveShotsVsBossSystem(this.playerShots, bossSys, this.state);
+      resolveShotsVsBossSystem(this.playerShots, bossSys, this.state, this.fxEvents);
     }
     // Estágio: concluir a última seção é VITÓRIA (o StageDirector soma o
     // defeatScore de cada chefe na transição). Boss Rush: vitória ao vencer
@@ -281,7 +301,7 @@ export class Simulation {
     } else if (this.mode === 'bossrush' && this.bossRush.completed && !this.state.won) {
       this.state.win();
     }
-    resolvePlayerVsBullets(this.player, this.enemyBullets, this.state);
+    resolvePlayerVsBullets(this.player, this.enemyBullets, this.state, this.fxEvents);
     this.state.tickTimers();
 
     // Dobra o estado observável no checksum.

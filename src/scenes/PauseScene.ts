@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { SceneKeys } from '../config/sceneKeys';
 import { VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '../config/layout';
 import { neonText, pulse } from '../ui/neonText';
+import { getHaptics } from '../services/HapticsService';
 
 /**
  * PauseScene — overlay de pausa sobre a GameScene (docs/04 Fase 2).
@@ -30,6 +31,19 @@ export class PauseScene extends Phaser.Scene {
     neonText(this, cx, cy + 90, '■ SAIR', 28, '#ff5d8f')
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.quitToMenu());
+
+    // Toggle de vibração (P5-04-03): só faz sentido onde a API existe.
+    const haptics = getHaptics();
+    if (haptics.isSupported) {
+      const label = (): string => `📳 VIBRAR: ${haptics.isEnabled ? 'ON' : 'OFF'}`;
+      const hapticBtn = neonText(this, cx, cy + 170, label(), 22, '#9af7ef').setInteractive({
+        useHandCursor: true,
+      });
+      hapticBtn.on('pointerdown', () => {
+        haptics.toggle();
+        hapticBtn.setText(label());
+      });
+    }
 
     this.input.keyboard?.on('keydown-ESC', () => this.resumeGame());
     this.input.keyboard?.on('keydown-P', () => this.resumeGame());

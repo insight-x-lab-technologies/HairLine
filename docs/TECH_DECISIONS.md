@@ -115,6 +115,103 @@ seção = `{type:'wave',waveId}` | `{type:'boss',bossId}`. Decisões fechadas:
   ordem de `STAGE_IDS` (contrato: ids nunca mudam de posição relativa). Save
   antigo sem o bloco ⇒ só o primeiro estágio aberto.
 
+## TD-19 — Camada de FX render-side: partículas + buffer de eventos (P5-01) ✅
+Juice da Fase 5 sem tocar o determinismo. Decisões fechadas:
+- **`effects.json` + `getEffects()`** (P5-01-01): shake/flash/anel-do-pulso e as
+  seções novas (partículas, hit-stop, anel de graze, HUD de Foco, haptics) saem
+  do código da cena para dados, no padrão `getPattern`/`getBoss`. Validação no
+  carregamento (`validateEffects`): cues existem em `ALL_AUDIO_CUES`, números
+  sãos. `src/sim/` NÃO conhece o arquivo.
+- **`ParticlePool` próprio + `Graphics`** (P5-01-02), não o emitter nativo do
+  Phaser (coerente com TD-08). Struct-of-arrays pré-alocado, sem `new` no loop;
+  saturação **descarta** o excedente. **Rng local decorativo** (privado do pool)
+  para espalhamento — respeita o lint (proibido `Math.random`), reproduzível em
+  teste, **fora do replay**. Avança por **tempo de render** (dtTicks do frame),
+  não por ticks da sim — é decorativo; congela junto no hit-stop.
+- **Buffer `Simulation.fxEvents`** (P5-01-03/P5-02-01): eventos `{type,x,y,color,
+  radius}` pré-alocados (cap 64), preenchidos nos pontos de colisão/graze via uma
+  interface mínima `FxEmitter` (mantém os sistemas desacoplados). **NÃO entra no
+  `hashState()`** (derivado/decorativo) ⇒ replays gravados seguem válidos. Zera o
+  índice a cada tick; com múltiplos ticks por frame, o render vê os eventos do
+  **último** tick (aceitável p/ FX). Saturação descarta sem alocar.
+- **Hit-stop no driver do loop** (P5-01-04), fora de `src/sim/`: a cena não
+  alimenta `loop.advance` por N ms e **não acumula** o tempo (sem catch-up). A
+  sequência de ticks/inputs fica idêntica ⇒ `verifyReplay`/determinismo intactos.
+  Alternativa de timestep variável dentro da sim **rejeitada** (complexidade +
+  risco de determinismo sem ganho). Lógica pura em `src/ui/HitStop.ts`.
+
+## TD-20 — Áudio dinâmico: trilha em camadas, SFX em camadas, haptics (P5-04) ✅
+Evolução do TD-09 (segue 100% procedural, sem assets). Decisões fechadas:
+- **`MusicDirector` puro** decide ganhos-alvo por camada a partir de um snapshot
+  (nível/chefe/vidas/gameOver); o `AudioService` aplica com ramps
+  (`linearRamp`, sobe rápido / desce devagar — anti liga-desliga no limiar).
+  Camadas: base-pad + rítmica (nível) + tensão (chefe) + perigo (vida baixa),
+  cada uma com seu `GainNode`. Dirigido por `src/data/audio.json`.
+- **SFX em camadas** com ruído branco **pré-gerado uma vez** (Rng local, como o
+  pool) + sub/osc; **variação** de pitch/ganho por disparo (Rng decorativo);
+  **`SfxPolicy` pura** para polifonia/prioridade (despeja a voz de menor
+  prioridade) e **ducking** da trilha em eventos grandes. Tudo em `audio.json`.
+- **Haptics** (`HapticsService`): `navigator.vibrate` por cue (padrões no
+  `effects.json`), no-op gracioso onde a API não existe (iOS Safari), throttle
+  global, toggle persistido (`hairline.haptics` no `SaveService`). `graze` e
+  `kill` comum **não vibram** (reserva o canal; bateria/dessensibilização).
+- **Apresentação pura**: nada disso entra na sim/replay/`hashState()`.
+
+## TD-21 — Cue `focusready` derivada de estado (P5-02-03) ✅
+A prontidão do pulso vira cue testável: o `AudioSnapshot` ganha
+`pulseReady = focus ≥ pulseCost` e `diffCues` emite `focusready` na borda de
+subida (uma vez por cruzamento; gastar e recarregar reemite). Mantém a cena sem
+lógica (padrão `AudioCues`), com regressão garantindo que cues existentes não
+mudam. `Simulation` expõe `pulseCost`/`grazeMargin` (somente-leitura) para o HUD
+e o anel de graze derivarem dos JSONs, sem duplicar números.
+
+## TD-22 — Cosméticos como dados + loadout no perfil (P6-01-01) ✅
+Cosméticos vivem em `src/data/cosmetics.json` (naves, cores de tiro, trilhas) e
+o serviço **puro** `src/services/Cosmetics.ts` resolve desbloqueio e loadout.
+Princípio: cosmético **nunca** afeta jogabilidade — a simulação não conhece o
+módulo; replay/ranking/Diário ficam intocados por construção (nada em `src/sim/`
+ou `src/systems/` muda). A seleção do jogador é persistida em `SaveService`
+(`hairline.loadout.v1`, parcial); `getLoadout()` resolve com fallback aos
+defaults se a escolha for inválida/bloqueada (nunca lança). Validação de
+integridade no carregamento (ids únicos, 1 default por tipo, #hex, `shape` em
+`ui/shapes`, preset não vazio, condição coerente).
+
+Vocabulário de **condições de desbloqueio** (`default | achievement |
+totalAtLeast`) e a superfície mínima de perfil (`CosmeticProfile =
+{ achievements, totals }`) são definidos aqui como contrato canônico que
+**P6-02-01** (conquistas) e **P6-03-01** (perfil/estatísticas) reusarão —
+inversão de dependência deliberada, já que aquelas issues ainda não existem. A
+validação cruzada catálogo⇄conquistas é **pluggável** (`validateCosmetics(cat,
+knownAchievementIds?)`): sem registro, ignora a checagem; o catálogo inicial usa
+só `default`/`totalAtLeast`, 100% validável hoje. `KNOWN_STATS` barra typos de
+`stat`. A nave padrão ganhou a forma nomeada `arrow` em `ui/shapes`
+(`isKnownShape`/`KNOWN_SHAPES`). **Pendente:** P6-01-02 (Hangar + aplicação
+visual/sonora do loadout em jogo).
+
+## TD-23 — Conquistas: condições declarativas + avaliação pós-run (P6-02-01) ✅
+Conquistas são **conteúdo** (`src/data/achievements.json`) avaliado por um motor
+**puro** (`src/services/Achievements.ts`). Condições são tipos **enumerados**, sem
+expressão/eval: `totalAtLeast` (total de perfil ≥ N), `runStat` (campo do
+`RunSummary` com `gte`/`lte` e modo opcional), `bestAtLeast` (melhor por modo ≥ N)
+e `winMode` (vencer num modo, `noDamage?` para "sem tomar dano"). O avaliador é
+`(defs, profile, run, unlockedIds) => newIds` — determinístico, idempotente (já
+desbloqueada não re-desbloqueia), ordem do JSON.
+
+Avaliação é **pós-run**, no ponto canônico de fim de run (`ResultsScene`, junto do
+`setBestScore`), nunca por tick — a simulação não conhece conquistas; sim/replay/
+`hashState`/leaderboard ficam intactos. `recordAndUnlock(store, defs, run)`
+registra a run nos totais e persiste os desbloqueios. IDs de conquista são
+**contrato imutável** (cosméticos os referenciam; desbloqueada é histórico do
+jogador — conquista removida do JSON permanece no perfil).
+
+Como **P6-03-01** (perfil) ainda não existe, a superfície mínima foi definida
+aqui e persistida no `SaveService`: totais (`totalRuns/Graze/Kills/Wins/Daily`),
+melhor por modo (`endless/stage/bossrush/daily`) e o mapa de conquistas
+(`{id: dataIso}`). `RunSummary` ganhou `livesLost` (derivado de
+`GameState.startLives − lives`, constante fora do `hashState`) para "vencer sem
+dano". P6-03-01 assume/expande esse perfil; P6-02-02 (toasts no Results +
+galeria) consome `newlyUnlockedIds`/o mapa. **Pendente:** P6-02-02.
+
 ## Decisões em aberto (revisitar quando necessário)
 - Formato compacto de replay (bitpacking de inputs) — hoje é array por tick.
 - Atlas único de sprites vs `Graphics` — só se a performance exigir (Fase 5).

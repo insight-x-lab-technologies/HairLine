@@ -59,4 +59,17 @@ describe('AudioCues — quais sons tocar a partir de deltas (Fase 2)', () => {
     const tele = { ...base, bossTelegraph: true };
     expect(diffCues(tele, { ...tele })).not.toContain('bossteleport');
   });
+
+  it('pulso fica pronto (não-pronto→pronto) → focusready; só na transição (P5-02-03)', () => {
+    // Cruzou o limiar de custo: emite uma vez.
+    expect(diffCues(base, { ...base, pulseReady: true })).toContain('focusready');
+    // Permanecer pronto não repete a cue.
+    const ready = { ...base, pulseReady: true };
+    expect(diffCues(ready, { ...ready })).not.toContain('focusready');
+    // Gastar o pulso (pronto→não) e recarregar (não→pronto) emite de novo.
+    expect(diffCues(ready, { ...ready, pulseReady: false })).not.toContain('focusready');
+    expect(diffCues({ ...base, pulseReady: false }, { ...base, pulseReady: true })).toContain(
+      'focusready',
+    );
+  });
 });

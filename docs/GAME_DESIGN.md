@@ -129,9 +129,56 @@ pausa. Abstraídos em `InputService` → eventos `move`/`focus`/`pulse`.
 
 ## Feedback / juice (estado)
 
-Dano: screen shake + flash vermelho + nave piscando (i-frames). Kill/graze/
-pulso/vitória: SFX procedural. Fundo: campo de estrelas parallax. Falta hit-stop
-e partículas (P5-01).
+Tuning de feel em `src/data/effects.json` (P5-01-01) e `src/data/audio.json`
+(P5-04); nada hardcoded na cena. Componentes:
+- **Câmera (P5-01-01):** screen shake + flash por cue, lidos do JSON. Dano =
+  shake + flash vermelho + nave piscando (i-frames).
+- **Partículas (P5-01-02/03):** `ParticlePool` decorativo (render-side, fora da
+  sim). Faísca no impacto (`shotHit`), explosão na cor do inimigo ao morrer
+  (`kill`/`bossKill`), estilhaço no dano ao jogador (`playerHit`). Disparadas
+  pelo buffer `Simulation.fxEvents` (posição+cor por evento), fora do `hashState`.
+- **Hit-stop (P5-01-04):** congelamento de poucos ms no dano/kill de chefe/troca
+  de fase. Vive no driver do loop (cena pula `loop.advance`); replay intacto.
+- **Graze (P5-02):** faísca no ponto do raspão + bala grazeada "vencida"
+  (brilho); **anel de graze** visível na nave (deriva de
+  `hitboxRadius + grazeMarginPx`), discreto fora do Foco, claro no Foco, com
+  "ping" a cada graze; **barra de Foco** no HUD com marca no custo e estado
+  "pulso pronto" (cor + botão aceso + cue `focusready`).
+- **Áudio (P5-04):** trilha dinâmica em camadas por intensidade
+  (`MusicDirector`: base→rítmica→tensão→perigo), SFX em camadas (ruído +
+  variação de pitch/ganho + polifonia/ducking via `SfxPolicy`), **haptics** no
+  celular por evento (toggle persistido; `graze`/`kill` não vibram).
+- Fundo: campo de estrelas parallax.
+
+## Cosméticos — `src/data/cosmetics.json` (P6-01)
+
+Desbloqueáveis puramente visuais/sonoros: **naves** (forma + cor), **cores de
+tiro** e **trilhas** (presets). **Regra de ouro:** cosmético *nunca* muda
+jogabilidade — só render/áudio. A simulação é cega a eles; replay, ranking e
+Diário ficam idênticos com ou sem loadout. Cada tipo tem exatamente **um
+default** (o visual atual) sempre disponível; os demais abrem por condição:
+`achievement` (uma conquista, P6-02) ou `totalAtLeast` (um total de perfil, ex.:
+graze acumulado, P6-03). A seleção (loadout) é persistida no aparelho; escolher
+item bloqueado é rejeitado na camada de serviço (`Cosmetics.selectCosmetic`),
+e um loadout inválido cai graciosamente nos defaults (`Cosmetics.getLoadout`).
+Cores de tiro são curadas para **não** confundir com balas inimigas
+(legibilidade é sagrada). A **tela Hangar** e a aplicação visual em jogo são
+P6-01-02 (a seguir).
+
+## Conquistas — `src/data/achievements.json` (P6-02)
+
+Metas declarativas avaliadas **ao fim de cada run** (nunca durante; a sim não as
+conhece). Cada conquista tem `id` (estável/imutável — cosméticos o referenciam),
+`title`, `desc` (= como desbloquear, texto único) e uma `condition` de tipo
+enumerado: `totalAtLeast` (total acumulado), `runStat` (resultado da run, com
+modo opcional), `bestAtLeast` (recorde por modo) ou `winMode` (vencer num modo,
+opcionalmente **sem tomar dano**). ~10 conquistas iniciais cobrem primeiras
+(1ª run, 1ª vitória), volume (1k/10k grazes, 1k abates), habilidade (200 grazes
+numa run, vitória impecável), modos (Boss Rush, Diário) e recorde (50k no
+Endless). Desbloqueio é **histórico**: persiste no perfil com a data, sobrevive a
+conquistas removidas do JSON, e nunca dá vantagem de jogo. Conquistas servem de
+condição de desbloqueio de cosméticos (P6-01) e aparecerão como toast no
+resultado + galeria (P6-02-02).
 
 ## Princípios de design inegociáveis
 

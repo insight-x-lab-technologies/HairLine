@@ -1,13 +1,26 @@
 import type { AudioCue } from '../systems/AudioCues';
+import { Rng } from './Rng';
+import { SfxPolicy } from './SfxPolicy';
+import { getAudioConfig } from '../content';
+import type { LayerGains } from './MusicDirector';
 
 /**
- * AudioService — síntese procedural de SFX + trilha simples via Web Audio
- * (Fase 2). Sem assets: cada som é um envelope de osciladores, o que combina
- * com a estética neon e evita pipeline de áudio (docs/01 §4.3).
+ * AudioService — síntese procedural de SFX + trilha via Web Audio (Fase 2,
+ * evoluído na Fase 5). Sem assets: cada som é um envelope de osciladores +
+ * ruído, o que combina com a estética neon e evita pipeline de áudio
+ * (docs/01 §4.3, TD-09).
  *
- * Backend de APRESENTAÇÃO: nunca é tocado pela simulação. É resiliente a
- * ambientes sem Web Audio (no-op) e só inicia após um gesto do usuário
- * (políticas de autoplay). Singleton via getAudio().
+ * Fase 5:
+ *  - Trilha em CAMADAS (P5-04-01): base-pad + rítmica + tensão + perigo, cada
+ *    uma com seu `GainNode`; a `GameScene` aplica ganhos-alvo via
+ *    `setLayerTargets` (ramps suaves). A decisão é do `MusicDirector` (puro).
+ *  - SFX em camadas (P5-04-02): ruído pré-gerado uma vez, variação sutil de
+ *    pitch/ganho por disparo (Rng decorativo), polifonia/prioridade via
+ *    `SfxPolicy` (puro) e ducking da trilha em eventos grandes.
+ *
+ * Backend de APRESENTAÇÃO: nunca é tocado pela simulação. Resiliente a
+ * ambientes sem Web Audio (no-op) e só inicia após um gesto do usuário.
+ * Singleton via getAudio().
  */
 const MUTE_KEY = 'hairline.muted';
 
@@ -17,11 +30,23 @@ class AudioService {
   private ctx: CtxLike | null = null;
   private master: GainNode | null = null;
   private musicGain: GainNode | null = null;
-  private musicNodes: OscillatorNode[] = [];
+  /** Ganho-base da trilha (alvo do ducking quando recupera). */
+  private musicBaseGain = 0.12;
+  private musicNodes: AudioScheduledSourceNode[] = [];
+  /** Buses de cada camada musical (P5-04-01). */
+  private layerGains: Partial<Record<keyof LayerGains, GainNode>> = {};
+  /** Alvos correntes por camada — escolhe ramp de entrada/saída. */
+  private layerCurrent: { base: number; rhythm: number; tension: number; danger: number } = {
+    base: 0,
+    rhythm: 0,
+    tension: 0,
+    danger: 0,
+  };
+  /** Buffer de ruído branco pré-gerado uma vez (P5-04-02). */
+  private noiseBuffer: AudioBuffer | null = null;
+  private policy: SfxPolicy | null = null;
   private muted = false;
   private started = false;
-  /** Último tempo (s) em que cada cue tocou — para throttle (ex.: graze). */
-  private lastPlayed: Partial<Record<AudioCue, number>> = {};
 
   constructor() {
     try {
@@ -45,8 +70,10 @@ class AudioService {
     this.master.gain.value = this.muted ? 0 : 0.9;
     this.master.connect(this.ctx.destination);
     this.musicGain = this.ctx.createGain();
-    this.musicGain.gain.value = 0.12;
+    this.musicGain.gain.value = this.musicBaseGain;
     this.musicGain.connect(this.master);
+    this.buildNoiseBuffer();
+    this.policy = new SfxPolicy(getAudioConfig().sfx);
     // Pode iniciar suspenso; retomar dentro do gesto do usuário.
     if (this.ctx.state === 'suspended') void this.ctx.resume();
     this.started = true;
@@ -73,28 +100,100 @@ class AudioService {
     }
   }
 
-  /** Inicia uma trilha-pad procedural suave em loop. Idempotente. */
+  // ---- Trilha em camadas (P5-04-01) --------------------------------------
+
+  /** Inicia a trilha procedural em camadas (todas em 0 exceto base). Idempotente. */
   startMusic(): void {
     if (!this.started || !this.ctx || !this.musicGain || this.musicNodes.length > 0) return;
     const ctx = this.ctx;
-    // Acorde-pad grave (A1/E2/A2) com leve detune — textura ambiente.
+    const mk = (initial: number): GainNode => {
+      const g = ctx.createGain();
+      g.gain.value = initial;
+      g.connect(this.musicGain!);
+      return g;
+    };
+    const cfg = getAudioConfig().music;
+    const base = mk(cfg.layers.base);
+    const rhythm = mk(0);
+    const tension = mk(0);
+    const danger = mk(0);
+    this.layerGains = { base, rhythm, tension, danger };
+    this.layerCurrent = { base: cfg.layers.base, rhythm: 0, tension: 0, danger: 0 };
+
+    // Base: acorde-pad grave (A1/E2/A2) com leve detune + LFO de "respiração".
     for (const f of [55, 82.5, 110]) {
       const osc = ctx.createOscillator();
       osc.type = 'sine';
       osc.frequency.value = f;
       osc.detune.value = (f % 7) - 3;
-      osc.connect(this.musicGain);
+      osc.connect(base);
       osc.start();
       this.musicNodes.push(osc);
     }
-    // LFO lento que faz o pad "respirar".
     const lfo = ctx.createOscillator();
     lfo.frequency.value = 0.07;
     const lfoGain = ctx.createGain();
     lfoGain.gain.value = 0.05;
-    lfo.connect(lfoGain).connect(this.musicGain.gain);
+    lfo.connect(lfoGain).connect(base.gain);
     lfo.start();
     this.musicNodes.push(lfo);
+
+    // Rítmica: saw pulsado por um LFO quadrado (entra com o nível).
+    const rOsc = ctx.createOscillator();
+    rOsc.type = 'sawtooth';
+    rOsc.frequency.value = 110;
+    const rPulse = ctx.createGain();
+    rPulse.gain.value = 0.5;
+    rOsc.connect(rPulse).connect(rhythm);
+    const rLfo = ctx.createOscillator();
+    rLfo.type = 'square';
+    rLfo.frequency.value = 2.4;
+    const rLfoGain = ctx.createGain();
+    rLfoGain.gain.value = 0.5;
+    rLfo.connect(rLfoGain).connect(rPulse.gain);
+    rOsc.start();
+    rLfo.start();
+    this.musicNodes.push(rOsc, rLfo);
+
+    // Tensão: intervalo dissonante (trítono) com leve tremolo — para chefe.
+    for (const f of [138.59, 196.0]) {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = f;
+      osc.connect(tension);
+      osc.start();
+      this.musicNodes.push(osc);
+    }
+
+    // Perigo: oitava brilhante (vida baixa) — sine agudo.
+    const dOsc = ctx.createOscillator();
+    dOsc.type = 'sine';
+    dOsc.frequency.value = 220;
+    dOsc.connect(danger);
+    dOsc.start();
+    this.musicNodes.push(dOsc);
+  }
+
+  /**
+   * Aplica os ganhos-alvo por camada com ramps suaves (P5-04-01). Sobe rápido
+   * (`rampMs.in`), desce devagar (`rampMs.out`) para evitar liga-desliga no
+   * limiar. Sem cliques: sempre `linearRampToValueAtTime`.
+   */
+  setLayerTargets(targets: LayerGains): void {
+    if (!this.started || !this.ctx) return;
+    const cfg = getAudioConfig().music.rampMs;
+    const now = this.ctx.currentTime;
+    (Object.keys(targets) as (keyof LayerGains)[]).forEach((k) => {
+      const g = this.layerGains[k];
+      if (!g) return;
+      const target = targets[k];
+      const rising = target > this.layerCurrent[k];
+      const ms = rising ? cfg.in : cfg.out;
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(g.gain.value, now);
+      g.gain.linearRampToValueAtTime(target, now + ms / 1000);
+      this.layerCurrent[k] = target;
+    });
   }
 
   /** Para a trilha. */
@@ -107,49 +206,61 @@ class AudioService {
       }
     }
     this.musicNodes = [];
+    this.layerGains = {};
+    this.layerCurrent = { base: 0, rhythm: 0, tension: 0, danger: 0 };
   }
 
-  /** Toca um cue de jogo. Sem efeito se mudo/sem contexto. */
+  // ---- SFX (P5-04-02) ----------------------------------------------------
+
+  /** Toca um cue de jogo. Sem efeito se mudo/sem contexto ou se a política negar. */
   play(cue: AudioCue): void {
     if (!this.started || this.muted || !this.ctx) return;
     const now = this.ctx.currentTime;
-    // Throttle de sons muito frequentes (graze).
-    const minGap = cue === 'graze' ? 0.06 : 0.0;
-    if (minGap > 0 && now - (this.lastPlayed[cue] ?? -1) < minGap) return;
-    this.lastPlayed[cue] = now;
+    const policy = this.policy;
+    if (policy && !policy.request(cue, now * 1000)) return;
+    const pf = policy ? policy.pitchFactor() : 1;
+    const gf = policy ? policy.gainFactor() : 1;
 
     switch (cue) {
       case 'graze':
-        this.blip(1400, 0.05, 'triangle', 0.25);
+        this.blip(1400 * pf, 0.05, 'triangle', 0.25 * gf);
         break;
       case 'kill':
-        this.blip(320, 0.12, 'square', 0.3, 120);
+        this.blip(320 * pf, 0.12, 'square', 0.3 * gf, 120);
+        this.noiseBurst(0.08, 0.18 * gf, 1800);
         break;
       case 'hit':
-        this.blip(140, 0.28, 'sawtooth', 0.5, -60);
+        this.blip(140 * pf, 0.28, 'sawtooth', 0.5 * gf, -60);
+        this.noiseBurst(0.16, 0.3 * gf, 600);
         break;
       case 'pulse':
-        this.sweep(900, 180, 0.4, 0.45);
+        this.sweep(900 * pf, 180, 0.4, 0.45 * gf);
+        this.noiseBurst(0.18, 0.12 * gf, 2600);
         break;
       case 'gameover':
-        this.sweep(440, 70, 0.9, 0.5);
+        this.sweep(440, 70, 0.9, 0.5 * gf);
+        this.noiseBurst(0.4, 0.2 * gf, 400);
         break;
       case 'victory':
-        this.arp([523, 659, 784, 1046], 0.12, 0.4);
+        this.arp([523, 659, 784, 1046], 0.12, 0.4 * gf);
         break;
       case 'bossshield':
-        // Quebra de escudo: varredura metálica descendente.
-        this.sweep(1200, 220, 0.3, 0.4);
+        this.sweep(1200 * pf, 220, 0.3, 0.4 * gf);
+        this.noiseBurst(0.1, 0.16 * gf, 3200);
         break;
       case 'bossteleport':
-        // Aviso de teleporte: bipe agudo ascendente.
-        this.blip(620, 0.14, 'sine', 0.3, 320);
+        this.blip(620 * pf, 0.14, 'sine', 0.3 * gf, 320);
         break;
       case 'bossentry':
-        // Entrada do chefe de estágio: sting grave/decidido (anuncia o perigo).
-        this.sweep(160, 320, 0.5, 0.45);
+        this.sweep(160, 320, 0.5, 0.45 * gf);
+        break;
+      case 'focusready':
+        // Prontidão do pulso (P5-02-03): bipe duplo ascendente, convidativo.
+        this.blip(660 * pf, 0.1, 'triangle', 0.32 * gf, 220);
         break;
     }
+
+    if (policy?.shouldDuck(cue)) this.duckMusic();
   }
 
   // ---- Síntese -----------------------------------------------------------
@@ -164,7 +275,7 @@ class AudioService {
     osc.frequency.setValueAtTime(freq, t);
     if (glide) osc.frequency.linearRampToValueAtTime(Math.max(40, freq + glide), t + dur);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(gain, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.005);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     osc.connect(g).connect(this.master!);
     osc.start(t);
@@ -181,7 +292,7 @@ class AudioService {
     osc.frequency.setValueAtTime(from, t);
     osc.frequency.exponentialRampToValueAtTime(Math.max(40, to), t + dur);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(gain, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.02);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     osc.connect(g).connect(this.master!);
     osc.start(t);
@@ -198,12 +309,59 @@ class AudioService {
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(f, t);
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.01);
       g.gain.exponentialRampToValueAtTime(0.0001, t + step * 1.2);
       osc.connect(g).connect(this.master!);
       osc.start(t);
       osc.stop(t + step * 1.3);
     });
+  }
+
+  /**
+   * Camada de ruído filtrado (impacto/explosão) a partir do buffer pré-gerado.
+   * Um `AudioBufferSourceNode` novo por disparo (descartável; nunca reusar um
+   * source já tocado — iOS/Safari re-trigger).
+   */
+  private noiseBurst(dur: number, gain: number, filterHz: number): void {
+    const ctx = this.ctx!;
+    if (!this.noiseBuffer) return;
+    const t = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = filterHz;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(Math.max(0.0002, gain), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filter).connect(g).connect(this.master!);
+    src.start(t);
+    src.stop(t + dur + 0.02);
+  }
+
+  /** Abaixa a trilha por ~`durationMs` e recupera (P5-04-02). */
+  private duckMusic(): void {
+    const ctx = this.ctx;
+    const mg = this.musicGain;
+    if (!ctx || !mg) return;
+    const { amount, durationMs } = getAudioConfig().sfx.duck;
+    const t = ctx.currentTime;
+    const reduced = this.musicBaseGain * (1 - amount);
+    mg.gain.cancelScheduledValues(t);
+    mg.gain.setValueAtTime(mg.gain.value, t);
+    mg.gain.linearRampToValueAtTime(reduced, t + 0.02);
+    mg.gain.linearRampToValueAtTime(this.musicBaseGain, t + durationMs / 1000);
+  }
+
+  /** Gera ~1s de ruído branco uma vez (Rng local decorativo, sem Math.random). */
+  private buildNoiseBuffer(): void {
+    const ctx = this.ctx!;
+    const len = Math.floor(ctx.sampleRate * 1);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    const rng = new Rng(0xc0ffee);
+    for (let i = 0; i < len; i++) data[i] = rng.next() * 2 - 1;
+    this.noiseBuffer = buf;
   }
 }
 

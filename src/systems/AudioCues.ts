@@ -18,7 +18,27 @@ export type AudioCue =
   | 'bossshield'
   | 'bossteleport'
   /** Entrada do chefe de estágio (P4-04b-02) — disparado pela cena, não por diff. */
-  | 'bossentry';
+  | 'bossentry'
+  /** Pulso refletor pronto (P5-02-03): Foco cruzou o custo do pulso. */
+  | 'focusready';
+
+/**
+ * Lista runtime de todas as cues (P5-01-01): valida `effects.json`/`audio.json`
+ * (cues referenciadas existem) sem precisar refletir sobre o tipo de união.
+ * Manter em sincronia com o tipo `AudioCue` acima.
+ */
+export const ALL_AUDIO_CUES: readonly AudioCue[] = [
+  'hit',
+  'kill',
+  'graze',
+  'pulse',
+  'gameover',
+  'victory',
+  'bossshield',
+  'bossteleport',
+  'bossentry',
+  'focusready',
+];
 
 export interface AudioSnapshot {
   readonly score: number;
@@ -33,6 +53,8 @@ export interface AudioSnapshot {
   readonly bossShieldActive?: boolean;
   /** Telegraph de teleporte do chefe ativo? (P4-02b-05) — borda de subida. */
   readonly bossTelegraph?: boolean;
+  /** Pulso pronto? (P5-02-03) Foco ≥ custo do pulso — borda de subida = cue. */
+  readonly pulseReady?: boolean;
 }
 
 /** Captura um instantâneo de áudio a partir da simulação. */
@@ -50,6 +72,7 @@ export function snapshotOf(sim: Simulation): AudioSnapshot {
     won: s.won,
     bossShieldActive: bossAlive ? (sys?.shieldActive ?? false) : false,
     bossTelegraph: bossAlive ? (sys?.telegraphActive ?? false) : false,
+    pulseReady: s.focus >= sim.pulseCost,
   };
 }
 
@@ -65,5 +88,7 @@ export function diffCues(prev: AudioSnapshot, cur: AudioSnapshot): AudioCue[] {
   if (prev.bossShieldActive && !cur.bossShieldActive) cues.push('bossshield');
   // Telegraph de teleporte começou — borda de subida (aviso ao jogador).
   if (!prev.bossTelegraph && cur.bossTelegraph) cues.push('bossteleport');
+  // Pulso ficou pronto — borda de subida do limiar de Foco (P5-02-03).
+  if (!prev.pulseReady && cur.pulseReady) cues.push('focusready');
   return cues;
 }

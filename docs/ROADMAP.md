@@ -18,11 +18,12 @@
 | 2 | Loop completo + 1º lançamento | ✅ exceto lançar (⏸️ P2-06) |
 | 3 | Desafio Diário + ranking | ✅ exceto deploy backend (⏸️ P3-03b) |
 | 4 | Profundidade de conteúdo | 🟡 em andamento |
-| 5–9+ | Polimento → visão | ⬜ a fazer |
+| 5 | Polimento, "juice" e áudio | 🟡 P5-01/02/04 feitas; falta P5-05/06 |
+| 6–9+ | Meta-jogo → visão | ⬜ a fazer |
 
 Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 5 ondas
 autorais, 3 estágios curados**.
-Testes: **250 passando** (37 arquivos). Ver `TEST_STRATEGY.md`.
+Testes: **329 passando** (46 arquivos). Ver `TEST_STRATEGY.md`.
 
 ---
 
@@ -120,18 +121,20 @@ Testes: **250 passando** (37 arquivos). Ver `TEST_STRATEGY.md`.
 
 ## FASE 5 — Polimento, "juice" e áudio ⬜
 
-- 🟡 **P5-01** Screen shake / flash / hit-stop / partículas. Parcial: já há shake +
-   flash de dano e glow; **falta** hit-stop, partículas de impacto, juice de kill.
-   Especificado em 4 issues SDD: `docs/issues/P5-01-*.md` (publicar com
-   `docs/issues/publish.sh`).
-- 🟡 **P5-02** Feedback claro de graze (o risco precisa ser *sentido*). Há SFX +
-   carga de Foco; **falta** efeito visual dedicado no momento do graze.
-   Especificado em 3 issues SDD: `docs/issues/P5-02-*.md` (publicar com
-   `docs/issues/publish.sh`).
+- ✅ **P5-01** Screen shake / flash / hit-stop / partículas. Concluído via 4
+   issues SDD (`docs/issues/P5-01-*.md`): `effects.json` + `getEffects()`,
+   `ParticlePool` decorativo, buffer `fxEvents` (impacto/kill/dano) e hit-stop no
+   driver do loop. Ver TD-19, `tests/{ParticlePool,FxEvents,HitStop,effects}.test.ts`.
+- ✅ **P5-02** Feedback claro de graze (o risco precisa ser *sentido*). Concluído
+   via 3 issues SDD (`docs/issues/P5-02-*.md`): faísca + bala grazeada destacada,
+   anel de graze na nave (deriva dos JSONs) com ping, barra de Foco no HUD +
+   estado "pulso pronto" + cue `focusready`. Ver TD-21.
 - ✅/🟡 **P5-03** Clareza visual das balas (glow + núcleo). Revisar legibilidade
    em densidade alta e daltonismo (ver P5-05).
-- ⬜ **P5-04** Trilha dinâmica; SFX em camadas; haptics no celular.
-   Especificado em 3 issues SDD: `docs/issues/P5-04-*.md`.
+- ✅ **P5-04** Trilha dinâmica; SFX em camadas; haptics no celular. Concluído via
+   3 issues SDD (`docs/issues/P5-04-*.md`): `MusicDirector` puro + camadas de
+   trilha (`audio.json`), `SfxPolicy` + ruído/variação/ducking, `HapticsService`
+   com toggle persistido. Ver TD-20, `tests/{MusicDirector,SfxPolicy,HapticsService.dom}.test.ts`.
 - ⬜ **P5-05** Acessibilidade: daltonismo, redução de flashes, alto contraste.
 - ⬜ **P5-06** Otimização de performance em celular fraco (orçamento de frame,
    modo de qualidade alto/baixo).
@@ -140,10 +143,23 @@ Testes: **250 passando** (37 arquivos). Ver `TEST_STRATEGY.md`.
 
 ## FASE 6 — Progressão & meta-jogo ⬜
 
-- ⬜ **P6-01** Desbloqueáveis cosméticos (naves, cores de bala, trilhas).
-  Especificado em 2 issues SDD: `docs/issues/P6-01-*.md` (depende de P6-02/03).
-- ⬜ **P6-02** Conquistas / desafios.
-  Especificado em 2 issues SDD: `docs/issues/P6-02-*.md` (depende de P6-03-01).
+- 🟡 **P6-01** Desbloqueáveis cosméticos (naves, cores de bala, trilhas).
+  **P6-01-01 ✅** (fundação de dados): `cosmetics.json` + serviço puro
+  `Cosmetics` (desbloqueio `default`/`achievement`/`totalAtLeast`, loadout com
+  fallback), `loadout` persistido no `SaveService`, validação de integridade no
+  carregamento, forma `arrow` em `ui/shapes`. Vocabulário de condições + perfil
+  mínimo definidos aqui como contrato canônico para P6-02/P6-03 (validação
+  cruzada com conquistas é pluggável). Ver TD-22, `tests/Cosmetics.test.ts`.
+  **P6-01-02 ⬜** (Hangar + aplicação visual/sonora em jogo — exige verificação
+  manual). Issues SDD: `docs/issues/P6-01-*.md`.
+- 🟡 **P6-02** Conquistas / desafios.
+  **P6-02-01 ✅** (motor): `achievements.json` + avaliador puro pós-run
+  (`Achievements`: condições `totalAtLeast`/`runStat`/`bestAtLeast`/`winMode`,
+  idempotente), perfil mínimo (totais + best por modo + mapa `{id:dataIso}`) no
+  `SaveService`, `recordAndUnlock` integrado ao fim de run (`ResultsScene`),
+  `RunSummary` com `livesLost` (via `GameState.startLives`). 10 conquistas
+  iniciais. Ver TD-23, `tests/Achievements.test.ts`. **P6-02-02 ⬜** (toasts no
+  Results + galeria — exige verificação manual). Issues: `docs/issues/P6-02-*.md`.
 - ⬜ **P6-03** Estatísticas pessoais e histórico de runs.
   Especificado em 2 issues SDD: `docs/issues/P6-03-*.md` (fundação da Fase 6).
 - ⬜ **P6-04** Naves com regras de jogo distintas (diferentes, não mais fortes).

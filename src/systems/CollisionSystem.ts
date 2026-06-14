@@ -2,6 +2,7 @@ import type { BulletPool } from '../entities/BulletPool';
 import type { EnemyPool } from '../entities/EnemyPool';
 import type { Boss, BossSystem } from './BossSystem';
 import type { GameState } from '../sim/GameState';
+import type { FxEmitter } from '../sim/FxEvents';
 
 /**
  * CollisionSystem — colisões por HITBOX lógica, não por bounding box de sprite
@@ -22,6 +23,7 @@ export function resolveShotsVsEnemies(
   shots: BulletPool,
   enemies: EnemyPool,
   state: GameState,
+  fx?: FxEmitter,
 ): void {
   shots.forEachActive((shot) => {
     let consumed = false;
@@ -35,8 +37,13 @@ export function resolveShotsVsEnemies(
         shots.despawn(shot);
         consumed = true;
         if (enemy.hp <= 0) {
+          // Explosão na cor/forma do inimigo (P5-01-03): posição e cor no tick.
+          fx?.emit('kill', enemy.x, enemy.y, enemy.color, enemy.radius);
           enemies.killAndRecycle(enemy);
           state.addKill();
+        } else {
+          // Faísca de impacto enquanto o inimigo sobrevive.
+          fx?.emit('shotHit', enemy.x, enemy.y, enemy.color);
         }
       }
     });
@@ -74,6 +81,7 @@ export function resolveShotsVsBossSystem(
   shots: BulletPool,
   sys: BossSystem,
   state: GameState,
+  fx?: FxEmitter,
 ): boolean {
   const boss = sys.boss;
   if (!boss.alive) return false;
@@ -97,7 +105,10 @@ export function resolveShotsVsBossSystem(
         if (part.hp <= 0) {
           part.hp = 0;
           part.alive = false;
+          fx?.emit('kill', part.x, part.y, undefined, part.radius);
           if (part.scorePerDefeat > 0) state.addScore(part.scorePerDefeat);
+        } else {
+          fx?.emit('shotHit', shot.x, shot.y);
         }
         return; // tiro consumido por esta parte
       }
@@ -112,9 +123,20 @@ export function resolveShotsVsBossSystem(
       if (!coreVulnerable) return; // partes vivas: núcleo imune
       if (sys.shieldActive) {
         sys.hitShield();
+        fx?.emit('shotHit', shot.x, shot.y);
         return;
       }
-      if (boss.onHit(1)) defeated = true;
+      const prevPhase = boss.phaseIndex;
+      if (boss.onHit(1)) {
+        defeated = true;
+        // Morte do chefe: explosão grande + hit-stop (P5-01-03/04).
+        fx?.emit('bossKill', boss.x, boss.y, undefined, boss.radius);
+      } else if (boss.phaseIndex > prevPhase) {
+        // Troca de fase: estilhaço próprio (distingue de kill comum no JSON).
+        fx?.emit('bossPhase', boss.x, boss.y, undefined, boss.radius);
+      } else {
+        fx?.emit('shotHit', shot.x, shot.y);
+      }
     }
   });
   return defeated;
@@ -125,6 +147,7 @@ export function resolvePlayerVsBullets(
   player: PlayerHitbox,
   enemyBullets: BulletPool,
   state: GameState,
+  fx?: FxEmitter,
 ): void {
   if (state.gameOver || state.invulnerable) return;
   let hit = false;
@@ -137,6 +160,9 @@ export function resolvePlayerVsBullets(
       enemyBullets.despawn(b);
       state.hitPlayer();
       hit = true;
+      // Estilhaço na nave (P5-01-03). Respeita i-frames por construção: só
+      // chega aqui quando o dano é aplicado (acima retornamos se invulnerável).
+      fx?.emit('playerHit', player.x, player.y);
     }
   });
 }

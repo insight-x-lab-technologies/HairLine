@@ -1,0 +1,103 @@
+{
+  "shake": {
+    "hit": { "durationMs": 200, "intensity": 0.014 },
+    "gameover": { "durationMs": 450, "intensity": 0.02 }
+  },
+  "flash": {
+    "hit": { "durationMs": 160, "r": 255, "g": 60, "b": 80 },
+    "gameover": { "durationMs": 300, "r": 255, "g": 40, "b": 60 },
+    "pulse": { "durationMs": 120, "r": 90, "g": 210, "b": 255 },
+    "victory": { "durationMs": 300, "r": 120, "g": 255, "b": 230 },
+    "bossshield": { "durationMs": 160, "r": 90, "g": 200, "b": 240 }
+  },
+  "reflectFx": { "durationTicks": 18 },
+  "particles": {
+    "pulse": {
+      "count": 16,
+      "speed": 320,
+      "lifeTicks": 26,
+      "size": 3,
+      "drag": 0.9,
+      "color": "#ffd166"
+    },
+    "shotHit": { "count": 3, "speed": 140, "lifeTicks": 9, "size": 2, "drag": 0.85 },
+    "kill": { "count": 12, "speed": 240, "lifeTicks": 22, "size": 3, "drag": 0.9 },
+    "bossKill": {
+      "count": 28,
+      "speed": 320,
+      "lifeTicks": 34,
+      "size": 4,
+      "drag": 0.92,
+      "shake": { "durationMs": 260, "intensity": 0.012 }
+    },
+    "bossPhase": {
+      "count": 18,
+      "speed": 220,
+      "lifeTicks": 24,
+      "size": 3,
+      "drag": 0.9,
+      "shake": { "durationMs": 140, "intensity": 0.008 }
+    },
+    "playerHit": {
+      "count": 14,
+      "speed": 200,
+      "lifeTicks": 20,
+      "size": 3,
+      "drag": 0.9,
+      "color": "#ff4d6d"
+    },
+    "graze": {
+      "count": 3,
+      "speed": 90,
+      "lifeTicks": 10,
+      "size": 2,
+      "drag": 0.88,
+      "color": "#9af7ef"
+    }
+  },
+  "consumeCapsPerFrame": {
+    "shotHit": 12,
+    "kill": 10,
+    "graze": 8
+  },
+  "hitStop": {
+    "enabled": true,
+    "maxMs": 200,
+    "durations": {
+      "playerHit": 90,
+      "bossPhase": 60,
+      "bossKill": 140,
+      "kill": 0,
+      "shotHit": 0,
+      "graze": 0
+    }
+  },
+  "grazeRing": {
+    "color": "#9af7ef",
+    "coreColor": "#ff4d6d",
+    "lineWidth": 1.5,
+    "alphaNormal": 0.07,
+    "alphaFocus": 0.5,
+    "pingDurationTicks": 12,
+    "pingAlpha": 0.7
+  },
+  "focusHud": {
+    "width": 230,
+    "height": 12,
+    "emptyColor": "#10323a",
+    "fillColor": "#39f5e8",
+    "readyColor": "#ffd166",
+    "markColor": "#ffffff",
+    "blipDurationTicks": 10
+  },
+  "haptics": {
+    "throttleMs": 80,
+    "maxPatternMs": 400,
+    "patterns": {
+      "hit": [60],
+      "pulse": [20],
+      "gameover": [80, 60, 120],
+      "victory": [30, 40, 30]
+    }
+  }
+}

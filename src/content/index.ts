@@ -1,4 +1,13 @@
-import type { Pattern, EnemyDef, Wave, BossDef, StageDef } from './types';
+import type {
+  Pattern,
+  EnemyDef,
+  Wave,
+  BossDef,
+  StageDef,
+  EffectsConfig,
+  AudioConfig,
+} from './types';
+import { ALL_AUDIO_CUES, type AudioCue } from '../systems/AudioCues';
 
 import ring from '../data/patterns/ring.json';
 import fan from '../data/patterns/fan.json';
@@ -34,6 +43,13 @@ import stage001 from '../data/stages/stage-001.json';
 import stage002 from '../data/stages/stage-002.json';
 import stage003 from '../data/stages/stage-003.json';
 
+import effectsData from '../data/effects.json';
+import audioData from '../data/audio.json';
+import cosmeticsData from '../data/cosmetics.json';
+import { validateCosmetics, type CosmeticCatalog } from '../services/Cosmetics';
+import achievementsData from '../data/achievements.json';
+import { validateAchievements, type AchievementDef } from '../services/Achievements';
+
 /**
  * Content — registro central do conteúdo dirigido por dados (docs/02 §3.2).
  *
@@ -68,20 +84,8 @@ const enemies = index<EnemyDef>([
   lancer,
   orbiter,
 ] as unknown as EnemyDef[]);
-const waves = index<Wave>([
-  wave001,
-  wave002,
-  wave003,
-  wave004,
-  wave005,
-] as unknown as Wave[]);
-const bosses = index<BossDef>([
-  warden,
-  spinner,
-  gunner,
-  vortex,
-  colossus,
-] as unknown as BossDef[]);
+const waves = index<Wave>([wave001, wave002, wave003, wave004, wave005] as unknown as Wave[]);
+const bosses = index<BossDef>([warden, spinner, gunner, vortex, colossus] as unknown as BossDef[]);
 // Ordem do array = ordem de desbloqueio dos estágios (P4-04b-04). É contrato:
 // ids nunca mudam de posição relativa após lançados.
 const stages = index<StageDef>([stage001, stage002, stage003] as unknown as StageDef[]);
@@ -137,7 +141,11 @@ export function validateBossDef(def: BossDef): void {
     }
     const mv = phase.movement;
     if (mv && mv.type === 'teleport') {
-      if (!(mv.intervalTicks > 0) || !(mv.telegraphTicks >= 1) || mv.telegraphTicks >= mv.intervalTicks) {
+      if (
+        !(mv.intervalTicks > 0) ||
+        !(mv.telegraphTicks >= 1) ||
+        mv.telegraphTicks >= mv.intervalTicks
+      ) {
         throw new Error(`${where}, fase ${i}: teleport exige 1 <= telegraphTicks < intervalTicks`);
       }
       if (!(mv.regionPadPx >= 0)) {
@@ -172,9 +180,125 @@ export function validateStageDef(def: StageDef): void {
   });
 }
 
+const effects = effectsData as unknown as EffectsConfig;
+const audioConfig = audioData as unknown as AudioConfig;
+const cosmetics = cosmeticsData as unknown as CosmeticCatalog;
+const achievements = (achievementsData as unknown as { achievements: AchievementDef[] }).achievements;
+const VALID_CUES = new Set<string>(ALL_AUDIO_CUES);
+
+function assertFiniteNonNeg(n: unknown, where: string): void {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0) {
+    throw new Error(`${where}: número inválido (${String(n)})`);
+  }
+}
+
+/**
+ * Valida `effects.json` (P5-01-01): cues de shake/flash existem no tipo
+ * `AudioCue`; números são finitos e não-negativos; seções de partículas,
+ * hit-stop, anel de graze, HUD de Foco e haptics são coerentes. Lança em erro.
+ */
+export function validateEffects(cfg: EffectsConfig): void {
+  for (const cue of Object.keys(cfg.shake)) {
+    if (!VALID_CUES.has(cue)) throw new Error(`effects.shake: cue desconhecida "${cue}"`);
+    assertFiniteNonNeg(cfg.shake[cue]!.durationMs, `effects.shake.${cue}.durationMs`);
+    assertFiniteNonNeg(cfg.shake[cue]!.intensity, `effects.shake.${cue}.intensity`);
+  }
+  for (const cue of Object.keys(cfg.flash)) {
+    if (!VALID_CUES.has(cue)) throw new Error(`effects.flash: cue desconhecida "${cue}"`);
+    const f = cfg.flash[cue]!;
+    for (const k of ['durationMs', 'r', 'g', 'b'] as const)
+      assertFiniteNonNeg(f[k], `effects.flash.${cue}.${k}`);
+  }
+  assertFiniteNonNeg(cfg.reflectFx.durationTicks, 'effects.reflectFx.durationTicks');
+  for (const [name, p] of Object.entries(cfg.particles)) {
+    for (const k of ['count', 'speed', 'lifeTicks', 'size'] as const)
+      assertFiniteNonNeg(p[k], `effects.particles.${name}.${k}`);
+    if (!(p.lifeTicks > 0)) throw new Error(`effects.particles.${name}.lifeTicks deve ser > 0`);
+  }
+  assertFiniteNonNeg(cfg.hitStop.maxMs, 'effects.hitStop.maxMs');
+  for (const [name, ms] of Object.entries(cfg.hitStop.durations))
+    assertFiniteNonNeg(ms, `effects.hitStop.durations.${name}`);
+  const gr = cfg.grazeRing;
+  for (const a of [gr.alphaNormal, gr.alphaFocus, gr.pingAlpha]) {
+    if (typeof a !== 'number' || a < 0 || a > 1)
+      throw new Error('effects.grazeRing: alpha fora de [0,1]');
+  }
+  assertFiniteNonNeg(gr.pingDurationTicks, 'effects.grazeRing.pingDurationTicks');
+  assertFiniteNonNeg(cfg.focusHud.width, 'effects.focusHud.width');
+  assertFiniteNonNeg(cfg.focusHud.height, 'effects.focusHud.height');
+  assertFiniteNonNeg(cfg.haptics.throttleMs, 'effects.haptics.throttleMs');
+  for (const [cue, pat] of Object.entries(cfg.haptics.patterns)) {
+    if (!Array.isArray(pat) || pat.length === 0)
+      throw new Error(`effects.haptics.patterns.${cue}: padrão vazio`);
+    let sum = 0;
+    for (const v of pat) {
+      if (typeof v !== 'number' || !(v > 0))
+        throw new Error(`effects.haptics.patterns.${cue}: valor <= 0`);
+      sum += v;
+    }
+    if (sum > cfg.haptics.maxPatternMs)
+      throw new Error(`effects.haptics.patterns.${cue}: soma > maxPatternMs`);
+  }
+}
+
+/**
+ * Valida `audio.json` (P5-04): ganhos de camada em [0,1], limiares positivos,
+ * ramps positivos; tetos de polifonia ≥ 1 e variações sãs. Lança em erro.
+ */
+export function validateAudioConfig(cfg: AudioConfig): void {
+  const m = cfg.music;
+  for (const g of Object.values(m.layers)) {
+    if (typeof g !== 'number' || g < 0 || g > 1)
+      throw new Error('audio.music.layers: ganho fora de [0,1]');
+  }
+  assertFiniteNonNeg(m.rhythmLevel, 'audio.music.rhythmLevel');
+  if (!(m.rampMs.in > 0) || !(m.rampMs.out > 0))
+    throw new Error('audio.music.rampMs deve ser positivo');
+  const s = cfg.sfx;
+  if (!(s.maxVoices >= 1)) throw new Error('audio.sfx.maxVoices deve ser >= 1');
+  for (const [cue, n] of Object.entries(s.perCueMax)) {
+    if (!(n >= 1)) throw new Error(`audio.sfx.perCueMax.${cue} deve ser >= 1`);
+  }
+  if (s.pitchVar < 0 || s.pitchVar > 1) throw new Error('audio.sfx.pitchVar fora de faixa');
+  if (s.gainVar < 0 || s.gainVar > 1) throw new Error('audio.sfx.gainVar fora de faixa');
+  if (s.duck.amount < 0 || s.duck.amount > 1)
+    throw new Error('audio.sfx.duck.amount fora de [0,1]');
+}
+
 // Validação de integridade no carregamento (falha cedo em dados quebrados).
 for (const def of bosses.values()) validateBossDef(def);
 for (const def of stages.values()) validateStageDef(def);
+validateEffects(effects);
+validateAudioConfig(audioConfig);
+// P6-01-01: catálogo inicial validado no carregamento. A validação cruzada com
+// `achievements.json` (P6-02-01) entra quando aquele registro existir — por ora
+// o catálogo não usa unlock por conquista, então não há referência a checar.
+validateCosmetics(cosmetics);
+// P6-02-01: definições de conquista validadas no carregamento.
+validateAchievements(achievements);
+
+export function getEffects(): EffectsConfig {
+  return effects;
+}
+
+export function getAudioConfig(): AudioConfig {
+  return audioConfig;
+}
+
+/** Catálogo de cosméticos (P6-01-01). Apresentação pura — fora da simulação. */
+export function getCosmetics(): CosmeticCatalog {
+  return cosmetics;
+}
+
+/** Definições de conquista (P6-02-01), na ordem do JSON (= ordem de exibição). */
+export function getAchievementDefs(): readonly AchievementDef[] {
+  return achievements;
+}
+
+/** Cue de áudio cuja seção de haptics deve existir (para integração na cena). */
+export function hapticPatternFor(cue: AudioCue): readonly number[] | undefined {
+  return effects.haptics.patterns[cue];
+}
 
 /** Ids registrados (para varreduras de integridade e seleção de conteúdo). */
 export const PATTERN_IDS: readonly string[] = [...patterns.keys()];
