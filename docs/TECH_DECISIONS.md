@@ -212,6 +212,31 @@ melhor por modo (`endless/stage/bossrush/daily`) e o mapa de conquistas
 dano". P6-03-01 assume/expande esse perfil; P6-02-02 (toasts no Results +
 galeria) consome `newlyUnlockedIds`/o mapa. **Pendente:** P6-02-02.
 
+## TD-24 — Perfil local: totais + recordes + histórico, fora da simulação (P6-03) ✅
+O **perfil** é estado do **jogador**, não do jogo: nunca entra em `src/sim/`,
+replay ou `hashState()`. Persistido pelo `SaveService` (store injetável, fallback
+em memória), em **chaves versionadas separadas** — não um blob único: totais
+(`hairline.profile.totals.v1`), recordes por modo (`…best.v1`), conquistas
+(`…achievements.v1`) e histórico (`…profile.history.v1`). A P6-03-01 especulava
+um `hairline.profile` único, mas a P6-02-01 já entregou o modelo por-chave e o
+`recordRun`; manter isso (não reescrever) é a menor implementação segura e cada
+chave já é versionada e resiliente por si.
+
+`recordRun(run: RunSummary)` é o **ponto canônico** de fim de run (`ResultsScene`):
+acumula totais (monotônico), sobe recordes por modo (máximo) e empurra a run no
+**anel de histórico** (mais recente primeiro, podado em **20** — teto fixo, perfil
+nunca cresce sem limite). Run abandonada (sair no meio) **não conta** — só a
+transição para Results grava.
+
+**Política de corrupção = reset:** JSON inválido/array malformado ⇒ valor zerado
+(`{}`/`[]`), nunca exceção; a gravação seguinte volta a funcionar. **Migração:** na
+primeira leitura sem o bloco de recordes, o `bestScore` legado é importado para
+`endless` (chave antiga intacta ⇒ rollback barato). `RunSummary` ganhou campos
+**informativos opcionais** para o histórico (`durationTicks`, `dateIso`, `seed`) —
+as conquistas não dependem deles, então não exigem `version` nova. Formatação é
+**derivada, não armazenada** (`ui/stats`: `durationTicks` ⇒ mm:ss via `TICK_RATE_HZ`;
+`dateIso` UTC ⇒ data local curta). A `StatsScene` é apresentação pura sobre isso.
+
 ## Decisões em aberto (revisitar quando necessário)
 - Formato compacto de replay (bitpacking de inputs) — hoje é array por tick.
 - Atlas único de sprites vs `Graphics` — só se a performance exigir (Fase 5).

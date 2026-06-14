@@ -11,6 +11,8 @@ import { verifyReplay, type Replay } from '../sim/Replay';
 import type { GameMode } from '../sim/types';
 import { getStage, STAGE_IDS, getAchievementDefs } from '../content';
 import { recordAndUnlock, type RunSummary } from '../services/Achievements';
+import { toastQueue, type Toast } from '../ui/achievements';
+import { getAudio } from '../services/AudioService';
 
 interface ResultsData {
   score?: number;
@@ -22,6 +24,7 @@ interface ResultsData {
   won?: boolean;
   mode?: GameMode;
   daily?: boolean;
+  seed?: number;
   dayKey?: string;
   stageId?: string;
   replay?: Replay;
@@ -49,7 +52,7 @@ export class ResultsScene extends Phaser.Scene {
 
     // P6-02-01: registra a run no perfil e desbloqueia conquistas (ponto
     // canônico de fim de run). `data.mode` ausente ⇒ entrada sem run real.
-    // O retorno (IDs novos) será anunciado pela UI da P6-02-02 (toasts).
+    // P6-02-02: o retorno (IDs novos) vira a fila de toasts anunciados no topo.
     if (data.mode !== undefined) {
       const run: RunSummary = {
         mode: data.mode,
@@ -59,8 +62,13 @@ export class ResultsScene extends Phaser.Scene {
         graze: data.graze ?? 0,
         kills: data.kills ?? 0,
         livesLost: data.livesLost ?? 0,
+        // Campos informativos do histórico de runs (P6-03-02).
+        durationTicks: data.ticks ?? 0,
+        dateIso: new Date().toISOString(),
+        ...(data.seed !== undefined ? { seed: data.seed } : {}),
       };
-      recordAndUnlock(getSave(), getAchievementDefs(), run);
+      const newly = recordAndUnlock(getSave(), getAchievementDefs(), run);
+      this.announce(toastQueue(getAchievementDefs(), newly));
     }
 
     neonText(this, cx, 250, `SCORE  ${score}`, 40, '#ffd166');
@@ -85,6 +93,34 @@ export class ResultsScene extends Phaser.Scene {
     this.time.delayedCall(400, () => {
       this.input.once('pointerdown', () => this.scene.start(SceneKeys.Menu));
       this.input.keyboard?.once('keydown-ENTER', () => this.scene.start(SceneKeys.Menu));
+    });
+  }
+
+  /**
+   * Anuncia as conquistas recém-desbloqueadas (P6-02-02): um banner por vez no
+   * topo (acima do placar), com fade/slide e SFX. Sequenciado e não-bloqueante —
+   * o jogador continua livre para tocar e voltar. Tweens/timers são da cena e
+   * morrem no shutdown (sem vazar listeners ao navegar).
+   */
+  private announce(queue: readonly Toast[]): void {
+    const cx = VIRTUAL_WIDTH / 2;
+    const HOLD = 1600;
+    const FADE = 300;
+    queue.forEach((toast, i) => {
+      this.time.delayedCall(i * (HOLD + FADE), () => {
+        getAudio().play('achievement');
+        const label = neonText(this, cx, 46, `CONQUISTA — ${toast.title}`, 24, '#ffd166').setAlpha(
+          0,
+        );
+        this.tweens.add({ targets: label, alpha: 1, y: 70, duration: FADE });
+        this.tweens.add({
+          targets: label,
+          alpha: 0,
+          delay: FADE + HOLD,
+          duration: FADE,
+          onComplete: () => label.destroy(),
+        });
+      });
     });
   }
 

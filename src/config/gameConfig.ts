@@ -3,6 +3,9 @@ import { VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from './layout';
 import { BootScene } from '../scenes/BootScene';
 import { PreloadScene } from '../scenes/PreloadScene';
 import { MenuScene } from '../scenes/MenuScene';
+import { HangarScene } from '../scenes/HangarScene';
+import { AchievementsScene } from '../scenes/AchievementsScene';
+import { StatsScene } from '../scenes/StatsScene';
 import { GameScene } from '../scenes/GameScene';
 import { PauseScene } from '../scenes/PauseScene';
 import { ResultsScene } from '../scenes/ResultsScene';
@@ -36,6 +39,16 @@ export function createGameConfig(parent: HTMLElement): Phaser.Types.Core.GameCon
     },
     // Física desligada por ora: a colisão do gênero é por hitbox lógica
     // (docs/02 §3.5), não pelo motor de física. Decisão revista na Fase 1.
-    scene: [BootScene, PreloadScene, MenuScene, GameScene, PauseScene, ResultsScene],
+    scene: [
+      BootScene,
+      PreloadScene,
+      MenuScene,
+      HangarScene,
+      AchievementsScene,
+      StatsScene,
+      GameScene,
+      PauseScene,
+      ResultsScene,
+    ],
   };
 }

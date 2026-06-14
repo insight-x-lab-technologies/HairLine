@@ -26,6 +26,10 @@ const PROFILE_TOTALS_KEY = 'hairline.profile.totals.v1';
 const PROFILE_BEST_KEY = 'hairline.profile.best.v1';
 /** Conquistas desbloqueadas (P6-02-01): { [id]: dataIso }. Histórico do jogador. */
 const ACHIEVEMENTS_KEY = 'hairline.achievements.v1';
+/** Anel das últimas runs (P6-03-02): array, mais recente primeiro, podado em N. */
+const HISTORY_KEY = 'hairline.profile.history.v1';
+/** Teto fixo do histórico: perfil nunca cresce sem limite (P6-03-02). */
+const HISTORY_LIMIT = 20;
 
 /** Progresso persistido de um estágio: concluído? melhor pontuação? */
 export interface StageRecord {
@@ -111,9 +115,39 @@ export class SaveService {
     return this.readNumberMap(PROFILE_TOTALS_KEY);
   }
 
-  /** Melhor pontuação por modo. Ausentes ⇒ 0. */
+  /**
+   * Melhor pontuação por modo. Ausentes ⇒ 0. Migração (P6-03-01 req 4): se o
+   * bloco de recordes ainda não existe, importa o `bestScore` legado para
+   * `endless` — a chave antiga fica intacta (rollback barato). Corrompido ⇒ {}.
+   */
   getBestByMode(): Record<string, number> {
+    if (this.store.getItem(PROFILE_BEST_KEY) === null) {
+      const legacy = this.getBestScore();
+      return legacy > 0 ? { endless: legacy } : {};
+    }
     return this.readNumberMap(PROFILE_BEST_KEY);
+  }
+
+  /**
+   * Histórico das últimas runs (P6-03-02), mais recente primeiro. Entrada
+   * inválida é descartada; JSON corrompido ⇒ []. Perfil gravado antes desta
+   * issue (sem a chave) ⇒ lista vazia, sem quebrar.
+   */
+  getHistory(): RunSummary[] {
+    const raw = this.store.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const out: RunSummary[] = [];
+      for (const item of parsed) {
+        const entry = toHistoryEntry(item);
+        if (entry) out.push(entry);
+      }
+      return out.slice(0, HISTORY_LIMIT);
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -136,6 +170,14 @@ export class SaveService {
       best[key] = Math.max(best[key] ?? 0, score);
     }
     this.store.setItem(PROFILE_BEST_KEY, JSON.stringify(best));
+
+    // Histórico (P6-03-02): insere no topo e poda ao teto. Totais/recordes
+    // acima preservam o agregado mesmo quando a run sai do anel.
+    const entry = toHistoryEntry(run);
+    if (entry) {
+      const list = [entry, ...this.getHistory()].slice(0, HISTORY_LIMIT);
+      this.store.setItem(HISTORY_KEY, JSON.stringify(list));
+    }
   }
 
   /** Mapa de conquistas desbloqueadas { [id]: dataIso }. Corrompido ⇒ {}. */
@@ -243,6 +285,31 @@ export class SaveService {
   private writeStages(map: Record<string, StageRecord>): void {
     this.store.setItem(STAGE_PROGRESS_KEY, JSON.stringify(map));
   }
+}
+
+/**
+ * Normaliza uma run num registro de histórico enxuto (P6-03-02). Aceita tanto
+ * um `RunSummary` ao gravar quanto um objeto cru do JSON ao ler — campos
+ * inválidos viram defaults seguros; `mode` ausente invalida a entrada (⇒ null).
+ */
+function toHistoryEntry(value: unknown): RunSummary | null {
+  if (!value || typeof value !== 'object') return null;
+  const o = value as Record<string, unknown>;
+  if (typeof o.mode !== 'string') return null;
+  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+  const entry: RunSummary = {
+    mode: o.mode as RunSummary['mode'],
+    daily: o.daily === true,
+    won: o.won === true,
+    score: num(o.score),
+    graze: num(o.graze),
+    kills: num(o.kills),
+    livesLost: num(o.livesLost),
+    durationTicks: num(o.durationTicks),
+    seed: num(o.seed),
+    ...(typeof o.dateIso === 'string' ? { dateIso: o.dateIso } : {}),
+  };
+  return entry;
 }
 
 /** Store volátil em memória (fallback). */

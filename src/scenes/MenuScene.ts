@@ -78,6 +78,23 @@ export class MenuScene extends Phaser.Scene {
       '#5a6b7a',
     );
 
+    // Hangar (P6-01-02) + Conquistas (P6-02-02): meta-progressão, lado a lado.
+    const hangar = neonText(this, cx - 110, cy + 292, '✦ HANGAR', 24, '#a78bfa').setInteractive({
+      useHandCursor: true,
+    });
+    hangar.on('pointerdown', () => this.scene.start(SceneKeys.Hangar));
+
+    const ach = neonText(this, cx + 110, cy + 292, '★ CONQUISTAS', 24, '#ffd166').setInteractive({
+      useHandCursor: true,
+    });
+    ach.on('pointerdown', () => this.scene.start(SceneKeys.Achievements));
+
+    // Estatísticas pessoais (P6-03-02): curva de maestria visível.
+    const stats = neonText(this, cx, cy + 328, '▦ ESTATÍSTICAS', 22, '#9af7ef').setInteractive({
+      useHandCursor: true,
+    });
+    stats.on('pointerdown', () => this.scene.start(SceneKeys.Stats));
+
     this.input.keyboard?.once('keydown-ENTER', () => this.start({}));
     this.input.keyboard?.once('keydown-SPACE', () => this.start({}));
 

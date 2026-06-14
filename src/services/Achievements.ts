@@ -45,6 +45,13 @@ export interface RunSummary {
   readonly kills: number;
   /** Vidas perdidas na run (0 ⇒ run sem tomar dano). */
   readonly livesLost: number;
+  /**
+   * Campos informativos do histórico de runs (P6-03). Opcionais: as conquistas
+   * (P6-02) não dependem deles, mas o perfil os guarda no anel de histórico.
+   */
+  readonly durationTicks?: number;
+  readonly dateIso?: string;
+  readonly seed?: number;
 }
 
 /**

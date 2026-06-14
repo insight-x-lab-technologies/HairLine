@@ -162,8 +162,21 @@ graze acumulado, P6-03). A seleção (loadout) é persistida no aparelho; escolh
 item bloqueado é rejeitado na camada de serviço (`Cosmetics.selectCosmetic`),
 e um loadout inválido cai graciosamente nos defaults (`Cosmetics.getLoadout`).
 Cores de tiro são curadas para **não** confundir com balas inimigas
-(legibilidade é sagrada). A **tela Hangar** e a aplicação visual em jogo são
-P6-01-02 (a seguir).
+(legibilidade é sagrada).
+
+O **Hangar** (`HangarScene`, acessível do Menu — P6-01-02) fecha o loop: três
+grupos (NAVE / TIRO / TRILHA), itens desbloqueados tocáveis com a seleção atual
+marcada e bloqueados apagados exibindo a **condição** (texto da `ui/hangar` —
+mesma `desc` da conquista quando o desbloqueio é por conquista, rótulo curto
+para `totalAtLeast`). Preview honesto embaixo (a nave/tiro como aparecem no
+jogo); tocar uma trilha toca uma amostra do preset (respeitando o mudo, parada
+no `shutdown` da cena). O modelo de exibição é puro/headless (`ui/hangar.ts`,
+testado). A aplicação em jogo é resolvida **uma vez** no `create()` da
+`GameScene` (`Cosmetics.getLoadout`): a nave é desenhada com a forma/cor
+escolhidas (tamanho constante entre naves — hitbox ≠ sprite), os tiros e suas
+faíscas usam a cor escolhida, e o preset de trilha é repassado ao
+`AudioService` (`setMusicPreset`, variação só de síntese). Nada disso chega à
+simulação — determinismo coberto por teste de regressão (`tests/hangar.test.ts`).
 
 ## Conquistas — `src/data/achievements.json` (P6-02)
 
@@ -177,8 +190,27 @@ opcionalmente **sem tomar dano**). ~10 conquistas iniciais cobrem primeiras
 numa run, vitória impecável), modos (Boss Rush, Diário) e recorde (50k no
 Endless). Desbloqueio é **histórico**: persiste no perfil com a data, sobrevive a
 conquistas removidas do JSON, e nunca dá vantagem de jogo. Conquistas servem de
-condição de desbloqueio de cosméticos (P6-01) e aparecerão como toast no
-resultado + galeria (P6-02-02).
+condição de desbloqueio de cosméticos (P6-01).
+
+Visibilidade (P6-02-02): ao fim da run, cada desbloqueio novo vira um **toast**
+sequenciado no topo da `ResultsScene` (banner "CONQUISTA — {title}", fade/slide,
+SFX `achievement`), sem cobrir o placar. A **galeria** (`AchievementsScene`,
+acessível do Menu) lista todas as conquistas na ordem do JSON: desbloqueadas
+acesas com a data, bloqueadas apagadas com a `desc` (fonte única do texto da
+condição), e contador `X/Y` no topo. O modelo de exibição é puro
+(`src/ui/achievements.ts`) — a cena só desenha.
+
+## Estatísticas pessoais (P6-03)
+
+A `StatsScene` (acessível do Menu) torna **visível a curva de maestria** que
+alimenta o "só mais uma run". Mostra os **totais** acumulados (runs, vitórias,
+abates, grazes, tempo jogado), os **recordes por modo** (só os que existem) e o
+**histórico recente** — anel das últimas **20** runs, mais recente primeiro, cada
+linha com data curta, modo, score, vitória/derrota e duração. Jogador novo (sem
+runs) vê um convite amigável, sem números quebrados. Toda formatação é **derivada,
+não armazenada** (`durationTicks` ⇒ mm:ss; `dateIso` UTC ⇒ data local) num helper
+puro `src/ui/stats.ts`; a cena só desenha. O perfil que isso lê é estado do
+jogador, fora da simulação/replay/ranking (ver `ARCHITECTURE.md`, TD-24).
 
 ## Princípios de design inegociáveis
 

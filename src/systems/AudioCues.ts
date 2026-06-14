@@ -20,7 +20,9 @@ export type AudioCue =
   /** Entrada do chefe de estágio (P4-04b-02) — disparado pela cena, não por diff. */
   | 'bossentry'
   /** Pulso refletor pronto (P5-02-03): Foco cruzou o custo do pulso. */
-  | 'focusready';
+  | 'focusready'
+  /** Conquista desbloqueada (P6-02-02) — disparado pela ResultsScene, não por diff. */
+  | 'achievement';
 
 /**
  * Lista runtime de todas as cues (P5-01-01): valida `effects.json`/`audio.json`
@@ -38,6 +40,7 @@ export const ALL_AUDIO_CUES: readonly AudioCue[] = [
   'bossteleport',
   'bossentry',
   'focusready',
+  'achievement',
 ];
 
 export interface AudioSnapshot {

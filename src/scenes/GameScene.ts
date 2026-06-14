@@ -18,7 +18,9 @@ import { hitStopDurationFor, applyHitStop, tickHitStop, isFrozen } from '../ui/H
 import { musicTargets } from '../services/MusicDirector';
 import { getHaptics } from '../services/HapticsService';
 import { getSave } from '../services/SaveService';
-import { getEffects, getAudioConfig } from '../content';
+import { getEffects, getAudioConfig, getCosmetics } from '../content';
+import { getLoadout, findCosmetic, type ShipCosmetic, type ShotColorCosmetic, type MusicCosmetic } from '../services/Cosmetics';
+import { cosmeticProfileFrom } from '../ui/hangar';
 import type { EffectsConfig } from '../content/types';
 import type { FxEventType } from '../sim/FxEvents';
 import playerData from '../data/player.json';
@@ -89,6 +91,8 @@ export class GameScene extends Phaser.Scene {
   /** Gravação de inputs da run (para replay/anti-cheat e Diário). */
   private recorder!: ReplayRecorder;
   private daily = false;
+  /** Seed da run corrente (informativo no histórico de runs — P6-03-02). */
+  private seed = 0;
   private dayKey: string | undefined;
   private stageId: string | undefined;
   private modLabels: string[] = [];
@@ -118,11 +122,20 @@ export class GameScene extends Phaser.Scene {
   /** Foco do frame anterior, para detectar ganho (blip). */
   private prevFocus = 0;
 
+  /** Loadout cosmético resolvido uma vez (P6-01-02): só apresentação. */
+  private shipShape = 'arrow';
+  private shipColor = 0x0bd3c6;
+  private shotColor = 0xffe066;
+  private musicPreset = 'default';
+
   constructor() {
     super(SceneKeys.Game);
   }
 
   create(data: GameSceneData = {}): void {
+    // Loadout cosmético (P6-01-02): resolvido UMA vez aqui (apresentação pura;
+    // a simulação não o recebe). Seleção inválida/bloqueada cai nos defaults.
+    this.resolveLoadout();
     this.drawField();
     // Camadas únicas redesenhadas por frame a partir dos pools da sim
     // (sem criar GameObjects no loop). Ordem de empilhamento (baixo→alto):
@@ -137,6 +150,8 @@ export class GameScene extends Phaser.Scene {
     this.focusGfx = this.add.graphics();
     this.particles = new ParticlePool(512, 0x5eed);
     this.cacheParticleColors();
+    // Faíscas de impacto do tiro herdam a cor do tiro do jogador (P6-01-02 §4).
+    this.particleColors.shotHit = this.shotColor;
     // Serviço de haptics (P5-04-03): preferência persistida no SaveService.
     getHaptics(getSave());
     this.ship = this.makeShip();
@@ -144,6 +159,7 @@ export class GameScene extends Phaser.Scene {
     // --- Núcleo determinístico -------------------------------------------
     // Seed/modo vêm do Menu (Endless casual = seed do relógio; Diário = seed do dia).
     const seed = data.seed ?? Date.now() >>> 0;
+    this.seed = seed;
     const mode = data.mode ?? 'endless';
     this.daily = data.daily ?? false;
     this.dayKey = data.dayKey;
@@ -171,7 +187,9 @@ export class GameScene extends Phaser.Scene {
     this.prevAudio = snapshotOf(this.sim);
     this.prevFocus = this.sim.state.focus;
     // Áudio só inicia após um gesto (políticas de autoplay) + trilha em loop.
+    // Preset de trilha do cosmético escolhido (P6-01-02), antes de iniciar.
     getAudio().start();
+    getAudio().setMusicPreset(this.musicPreset);
     getAudio().startMusic();
 
     // --- Input abstrato (toque/mouse/teclado → eventos lógicos) ----------
@@ -382,11 +400,12 @@ export class GameScene extends Phaser.Scene {
 
     this.drawBoss();
 
-    // Tiros do jogador: núcleo + leve rastro/brilho.
+    // Tiros do jogador: glow na cor do cosmético (P6-01-02) + núcleo claro.
     this.shotsGfx.clear();
     this.sim.playerShots.forEachActive((b) => {
-      this.shotsGfx.fillStyle(0x9af7ef, 0.25).fillCircle(b.x, b.y, b.radius * 2.2);
-      this.shotsGfx.fillStyle(0xffffff, 1).fillCircle(b.x, b.y, b.radius);
+      this.shotsGfx.fillStyle(this.shotColor, 0.3).fillCircle(b.x, b.y, b.radius * 2.2);
+      this.shotsGfx.fillStyle(this.shotColor, 1).fillCircle(b.x, b.y, b.radius * 1.25);
+      this.shotsGfx.fillStyle(0xffffff, 0.95).fillCircle(b.x, b.y, b.radius * 0.6);
     });
 
     // Balas inimigas: glow âmbar + núcleo claro (legibilidade do perigo).
@@ -470,6 +489,24 @@ export class GameScene extends Phaser.Scene {
       getAudioConfig().music,
     );
     getAudio().setLayerTargets(targets);
+  }
+
+  /**
+   * Resolve o loadout cosmético (P6-01-02) do save para a apresentação: forma/
+   * cor da nave, cor do tiro e preset de trilha. Seleção inválida/bloqueada cai
+   * nos defaults (`getLoadout` nunca lança). NADA disto chega à simulação.
+   */
+  private resolveLoadout(): void {
+    const catalog = getCosmetics();
+    const save = getSave();
+    const loadout = getLoadout(catalog, cosmeticProfileFrom(save), save.getLoadoutSelection());
+    const ship = findCosmetic(catalog, loadout.shipId) as ShipCosmetic;
+    const shot = findCosmetic(catalog, loadout.shotColorId) as ShotColorCosmetic;
+    const music = findCosmetic(catalog, loadout.musicId) as MusicCosmetic;
+    this.shipShape = ship.shape;
+    this.shipColor = Phaser.Display.Color.HexStringToColor(ship.color).color;
+    this.shotColor = Phaser.Display.Color.HexStringToColor(shot.color).color;
+    this.musicPreset = music.preset;
   }
 
   /** Pré-converte as cores próprias de cada tipo de partícula (hex→int). */
@@ -717,16 +754,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   private makeShip(): Phaser.GameObjects.Container {
+    // Forma/cor vêm do cosmético resolvido (P6-01-02); tamanho é constante
+    // entre naves — HITBOX ≠ SPRITE (§3.5): nave maior NÃO é hitbox maior.
+    const fill = this.shipColor;
+    const stroke = this.lightenColor(this.shipColor, 90);
     // Chama do motor (atrás), pulsa no update.
     this.engine = this.add.triangle(0, 18, -8, 0, 8, 0, 0, 26, 0xffd166).setAlpha(0.9);
-    const glow = this.add.circle(0, 0, 34, 0x39f5e8, 0.1);
-    // Corpo: seta dupla camada (preenchimento + contorno neon).
-    const body = this.add
-      .polygon(0, 0, [0, -30, 20, 22, 0, 12, -20, 22], 0x0bd3c6, 1)
-      .setStrokeStyle(3, 0x9af7ef);
+    const glow = this.add.circle(0, 0, 34, this.shipColor, 0.12);
+    // Corpo: forma do cosmético (preenchimento + contorno neon claro).
+    const pts = shapePoints(this.shipShape, 0, 0, 30);
+    const flat = pts.length > 0 ? pts.flatMap((p) => [p.x, p.y]) : [0, -30, 20, 22, 0, 12, -20, 22];
+    const body = this.add.polygon(0, 0, flat, fill, 1).setStrokeStyle(3, stroke);
     const wing = this.add
-      .polygon(0, 0, [0, -8, 26, 26, -26, 26], 0x0b8f88, 0.5)
-      .setStrokeStyle(1, 0x39f5e8);
+      .polygon(0, 0, [0, -8, 26, 26, -26, 26], this.lightenColor(this.shipColor, -60), 0.5)
+      .setStrokeStyle(1, stroke);
     // Ponto central = HITBOX lógica, muito menor que o sprite (§3.5).
     const hitbox = this.add.circle(0, 0, 4, 0xff4d6d).setStrokeStyle(2, 0xffffff);
     return this.add.container(this.target.x, this.target.y, [
@@ -736,6 +777,15 @@ export class GameScene extends Phaser.Scene {
       body,
       hitbox,
     ]);
+  }
+
+  /** Clareia (amount>0) ou escurece (amount<0) uma cor int — contorno/asa neon. */
+  private lightenColor(color: number, amount: number): number {
+    const clamp = (v: number): number => Math.max(0, Math.min(255, v));
+    const r = clamp(((color >> 16) & 0xff) + amount);
+    const g = clamp(((color >> 8) & 0xff) + amount);
+    const b = clamp((color & 0xff) + amount);
+    return (r << 16) | (g << 8) | b;
   }
 
   private makeMapper(): ViewportMapper {
@@ -766,6 +816,7 @@ export class GameScene extends Phaser.Scene {
       won: s.won,
       mode: this.sim.mode,
       daily: this.daily,
+      seed: this.seed,
       dayKey: this.dayKey,
       stageId: this.stageId,
       replay: this.recorder.finalize(this.sim),

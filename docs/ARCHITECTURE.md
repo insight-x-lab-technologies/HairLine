@@ -39,8 +39,15 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
 - **`src/entities/`**: `BulletPool` (com aceleração), `EnemyPool` — **pools
   pré-alocados**, nunca `new` no loop.
 - **`src/services/`**: `Rng` (mulberry32), `InputService`, `SafeArea`,
-  `AudioService` (Web Audio procedural), `SaveService` (recorde), `PlayerIdentity`,
+  `AudioService` (Web Audio procedural), `SaveService` (**perfil local**: recorde,
+  totais, recordes por modo, conquistas e histórico de runs), `PlayerIdentity`,
   `DailySeed`, `ShareCard`, `ShareImage`, `LeaderboardService` (Local + Remote).
+  - **Perfil local (P6-03):** estado do **jogador**, não do jogo — nunca entra na
+    `sim`, no replay ou no `hashState()`. Chaves versionadas separadas; gravado uma
+    vez por fim de run (`recordRun`, ponto canônico em Results). Contém totais,
+    recordes por modo, conquistas e o anel das últimas 20 runs; **nunca** contém
+    estado de simulação, inputs ou nada que afete determinismo/ranking. Save
+    corrompido ⇒ reset limpo (nunca quebra o jogo). Ver TD-24.
 - **`src/content/`**: `index.ts` (registro:
   getPattern/getEnemyDef/getBoss/getWave/getStage/**getEffects/getAudioConfig** +
   listas de ids, validação de bosses/estágios/**effects/audio** no load) e

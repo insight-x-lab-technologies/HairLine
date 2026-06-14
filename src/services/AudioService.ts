@@ -26,6 +26,23 @@ const MUTE_KEY = 'hairline.muted';
 
 type CtxLike = AudioContext;
 
+/**
+ * Presets de trilha (cosméticos `music` — P6-01-02). Variação só de síntese:
+ * frequência da base, oscilador/andamento da rítmica. NÃO afeta jogabilidade.
+ * `default` reproduz a trilha histórica; novos presets entram aqui (o catálogo
+ * em `cosmetics.json` referencia pela chave).
+ */
+interface MusicPreset {
+  readonly baseHz: readonly number[];
+  readonly rhythmType: OscillatorType;
+  readonly rhythmHz: number;
+  readonly pulseHz: number;
+}
+const MUSIC_PRESETS: Readonly<Record<string, MusicPreset>> = {
+  default: { baseHz: [55, 82.5, 110], rhythmType: 'sawtooth', rhythmHz: 110, pulseHz: 2.4 },
+  pulse: { baseHz: [55, 73.42, 110], rhythmType: 'square', rhythmHz: 146.83, pulseHz: 3.6 },
+};
+
 class AudioService {
   private ctx: CtxLike | null = null;
   private master: GainNode | null = null;
@@ -47,6 +64,8 @@ class AudioService {
   private policy: SfxPolicy | null = null;
   private muted = false;
   private started = false;
+  /** Preset de trilha corrente (cosmético `music` — P6-01-02). */
+  private musicPreset = 'default';
 
   constructor() {
     try {
@@ -102,6 +121,30 @@ class AudioService {
 
   // ---- Trilha em camadas (P5-04-01) --------------------------------------
 
+  /**
+   * Define o preset de trilha (cosmético `music` — P6-01-02). Chame ANTES de
+   * `startMusic`; preset desconhecido cai em `default`. Não rebuilda trilha já
+   * tocando (a `GameScene` define antes de iniciar; o preview para e reinicia).
+   */
+  setMusicPreset(preset: string): void {
+    this.musicPreset = preset in MUSIC_PRESETS ? preset : 'default';
+  }
+
+  /**
+   * Toca uma amostra audível do preset (Hangar — P6-01-02): para qualquer
+   * trilha corrente, reinicia com o preset e sobe base+rítmica. O chamador é
+   * responsável por `stopMusic()` ao sair da cena (disciplina dos listeners).
+   */
+  previewMusic(preset: string): void {
+    this.start();
+    if (!this.started) return;
+    this.stopMusic();
+    this.setMusicPreset(preset);
+    this.startMusic();
+    const layers = getAudioConfig().music.layers;
+    this.setLayerTargets({ base: layers.base, rhythm: layers.rhythm, tension: 0, danger: 0 });
+  }
+
   /** Inicia a trilha procedural em camadas (todas em 0 exceto base). Idempotente. */
   startMusic(): void {
     if (!this.started || !this.ctx || !this.musicGain || this.musicNodes.length > 0) return;
@@ -113,6 +156,7 @@ class AudioService {
       return g;
     };
     const cfg = getAudioConfig().music;
+    const preset = MUSIC_PRESETS[this.musicPreset] ?? MUSIC_PRESETS.default!;
     const base = mk(cfg.layers.base);
     const rhythm = mk(0);
     const tension = mk(0);
@@ -120,8 +164,8 @@ class AudioService {
     this.layerGains = { base, rhythm, tension, danger };
     this.layerCurrent = { base: cfg.layers.base, rhythm: 0, tension: 0, danger: 0 };
 
-    // Base: acorde-pad grave (A1/E2/A2) com leve detune + LFO de "respiração".
-    for (const f of [55, 82.5, 110]) {
+    // Base: acorde-pad grave (do preset) com leve detune + LFO de "respiração".
+    for (const f of preset.baseHz) {
       const osc = ctx.createOscillator();
       osc.type = 'sine';
       osc.frequency.value = f;
@@ -138,16 +182,17 @@ class AudioService {
     lfo.start();
     this.musicNodes.push(lfo);
 
-    // Rítmica: saw pulsado por um LFO quadrado (entra com o nível).
+    // Rítmica: osc pulsado por um LFO quadrado (entra com o nível). O preset
+    // varia timbre/andamento (cosmético `music` — P6-01-02).
     const rOsc = ctx.createOscillator();
-    rOsc.type = 'sawtooth';
-    rOsc.frequency.value = 110;
+    rOsc.type = preset.rhythmType;
+    rOsc.frequency.value = preset.rhythmHz;
     const rPulse = ctx.createGain();
     rPulse.gain.value = 0.5;
     rOsc.connect(rPulse).connect(rhythm);
     const rLfo = ctx.createOscillator();
     rLfo.type = 'square';
-    rLfo.frequency.value = 2.4;
+    rLfo.frequency.value = preset.pulseHz;
     const rLfoGain = ctx.createGain();
     rLfoGain.gain.value = 0.5;
     rLfo.connect(rLfoGain).connect(rPulse.gain);
@@ -257,6 +302,10 @@ class AudioService {
       case 'focusready':
         // Prontidão do pulso (P5-02-03): bipe duplo ascendente, convidativo.
         this.blip(660 * pf, 0.1, 'triangle', 0.32 * gf, 220);
+        break;
+      case 'achievement':
+        // Desbloqueio (P6-02-02): arpejo curto e brilhante, distinto da vitória.
+        this.arp([784, 988, 1318], 0.1, 0.34 * gf);
         break;
     }
 

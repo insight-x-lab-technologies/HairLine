@@ -23,7 +23,7 @@
 
 Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 5 ondas
 autorais, 3 estágios curados**.
-Testes: **329 passando** (46 arquivos). Ver `TEST_STRATEGY.md`.
+Testes: **338 passando** (47 arquivos). Ver `TEST_STRATEGY.md`.
 
 ---
 
@@ -143,25 +143,46 @@ Testes: **329 passando** (46 arquivos). Ver `TEST_STRATEGY.md`.
 
 ## FASE 6 — Progressão & meta-jogo ⬜
 
-- 🟡 **P6-01** Desbloqueáveis cosméticos (naves, cores de bala, trilhas).
+- ✅ **P6-01** Desbloqueáveis cosméticos (naves, cores de bala, trilhas).
   **P6-01-01 ✅** (fundação de dados): `cosmetics.json` + serviço puro
   `Cosmetics` (desbloqueio `default`/`achievement`/`totalAtLeast`, loadout com
   fallback), `loadout` persistido no `SaveService`, validação de integridade no
   carregamento, forma `arrow` em `ui/shapes`. Vocabulário de condições + perfil
   mínimo definidos aqui como contrato canônico para P6-02/P6-03 (validação
   cruzada com conquistas é pluggável). Ver TD-22, `tests/Cosmetics.test.ts`.
-  **P6-01-02 ⬜** (Hangar + aplicação visual/sonora em jogo — exige verificação
-  manual). Issues SDD: `docs/issues/P6-01-*.md`.
-- 🟡 **P6-02** Conquistas / desafios.
+  **P6-01-02 ✅** (Hangar + aplicação visual/sonora em jogo): modelo de exibição
+  puro `ui/hangar.ts` (grupos NAVE/TIRO/TRILHA, acesa/apagada/selecionada,
+  condição de fonte única; ponte `cosmeticProfileFrom` injeta `bestScore` nos
+  totais), `HangarScene` acessível do Menu com preview honesto e amostra de
+  trilha por preset, aplicação no `create()` da `GameScene` (forma/cor da nave,
+  cor de tiro/faíscas, preset de trilha via `AudioService.setMusicPreset`).
+  Determinismo coberto por regressão (`tests/hangar.test.ts`). Falta apenas a
+  verificação manual com `npm run dev`.
+- ✅ **P6-02** Conquistas / desafios.
   **P6-02-01 ✅** (motor): `achievements.json` + avaliador puro pós-run
   (`Achievements`: condições `totalAtLeast`/`runStat`/`bestAtLeast`/`winMode`,
   idempotente), perfil mínimo (totais + best por modo + mapa `{id:dataIso}`) no
   `SaveService`, `recordAndUnlock` integrado ao fim de run (`ResultsScene`),
   `RunSummary` com `livesLost` (via `GameState.startLives`). 10 conquistas
-  iniciais. Ver TD-23, `tests/Achievements.test.ts`. **P6-02-02 ⬜** (toasts no
-  Results + galeria — exige verificação manual). Issues: `docs/issues/P6-02-*.md`.
-- ⬜ **P6-03** Estatísticas pessoais e histórico de runs.
-  Especificado em 2 issues SDD: `docs/issues/P6-03-*.md` (fundação da Fase 6).
+  iniciais. Ver TD-23, `tests/Achievements.test.ts`. **P6-02-02 ✅** (UI):
+  toasts sequenciados no topo da `ResultsScene` (cue `achievement`) + galeria
+  `AchievementsScene` (acessível do Menu; acesas com data, bloqueadas com a
+  `desc`, contador `X/Y`). Modelo puro `src/ui/achievements.ts`,
+  `tests/achievements-ui.test.ts`. Issues: `docs/issues/P6-02-*.md`.
+- ✅ **P6-03** Estatísticas pessoais e histórico de runs.
+  **P6-03-01 ✅** (perfil): `recordRun` no `SaveService` consolidado como ponto
+  canônico de fim de run — acumula totais (monotônico) e recordes por modo,
+  migra o `bestScore` legado para `endless` (chave antiga intacta), corrupção ⇒
+  reset limpo. `RunSummary` ganhou campos informativos opcionais (`durationTicks`,
+  `dateIso`, `seed`). **Decisão:** mantido o modelo de chaves versionadas
+  separadas já entregue na P6-02-01 (não o `hairline.profile` único que a issue
+  especulava) — menor mudança segura, sem reescrever a integração de conquistas.
+  **P6-03-02 ✅** (histórico + tela): anel das **20** últimas runs no perfil
+  (insere no topo, poda no teto; agregados preservados), nova `StatsScene`
+  (acessível do Menu) com totais, recordes por modo e histórico recente; estado
+  vazio amigável. Helpers puros `src/ui/stats.ts` (ticks⇒mm:ss, data curta).
+  Ver TD-24, `tests/SaveService.test.ts`, `tests/stats-ui.test.ts`. Issues:
+  `docs/issues/P6-03-*.md`.
 - ⬜ **P6-04** Naves com regras de jogo distintas (diferentes, não mais fortes).
 - ⬜ **P6-05** Curva de maestria visível (rankings de habilidade).
 
