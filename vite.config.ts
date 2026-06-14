@@ -1,10 +1,16 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import pkg from './package.json';
 
 // Build/dev config. A simulação de jogo é determinística e independente do
 // render (ver docs/02). Aqui só tratamos bundling, dev server e PWA.
 export default defineConfig({
   base: './',
+  // Fonte ÚNICA de versão (P6-06-03): injeta a versão do package.json no bundle
+  // (consumida por src/config/about.ts). Espelhado em vitest.config.ts.
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   server: {
     // Escuta em todas as interfaces (acesso via LAN/Tailscale). A porta é
     // definida pelo scripts/run.sh (--port 8080 --strictPort).

@@ -66,7 +66,13 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   buffer `Simulation.fxEvents` (decorativo, fora do `hashState`) e dispara
   partículas/hit-stop; `services/MusicDirector` + `SfxPolicy` (puros) dirigem o
   áudio dinâmico; `services/HapticsService` faz a vibração.
-- **`src/config/`**: `layout` (virtual 720×1280, 60Hz), `gameConfig`, `sceneKeys`.
+- **`src/config/`**: `layout` (virtual 720×1280, 60Hz), `gameConfig`, `sceneKeys`,
+  **`about`** (P6-06: fonte única de versão via `__APP_VERSION__` injetado por
+  `define`, estúdio, URL do jogo, frase de share e links de doação).
+- **Home (P6-06):** `ui/home` (modelo de layout puro, responsivo/safe-areas, com
+  rodapé reservado), `ui/heroBackground` (geometria decorativa procedural via
+  `Rng`) e `ui/socialLinks` (alvos de share puros + `openExternal`/`shareGame`
+  defensivos). A `MenuScene` só desenha. Render-side puro — nada toca a sim. TD-26.
 - **`worker/`**: Cloudflare Worker (KV) do ranking — **não deployado**.
 
 ## Determinismo: regras de ouro

@@ -266,6 +266,29 @@ reprova o replay (anti-cheat). **Sem desbloqueio** (são sidegrades; o schema n�
 impede um `unlock` futuro). **Sem distinção visual por classe** (aparência segue
 sendo cosmético) — fora de escopo. Balanceamento é tuning de JSON + teste manual.
 
+## TD-26 — Home profissional: arte procedural, versão única e share por rede (P6-06) ✅
+**Decisão central:** a "nova home profissional" (P6-06) é construída **dentro da
+estética neon vetorial/procedural** — sem introduzir pipeline de assets raster
+(contraria a `PRODUCT_VISION`; raster exigiria preload/otimização/PWA-cache e
+abriria um TD próprio). O hero é o título em **camadas de glow** + fundo
+procedural (`ui/heroBackground`, geometria determinística por `Rng` com seed do
+relógio — decorativo, fora do `hashState`). Layout via **modelo puro** `ui/home`
+(responsivo, safe-areas, rodapé reservado); a `MenuScene` só desenha.
+
+**Versão = fonte única:** `__APP_VERSION__` é injetado no build a partir do
+`package.json` via `define` em **vite.config.ts e vitest.config.ts** (espelhados,
+para o teste enxergar a versão), exposto por `src/config/about.ts` com fallback
+defensivo. `package.json` saiu de `0.0.0` para `0.1.0`.
+
+**Compartilhar o JOGO (≠ ShareCard):** `ui/socialLinks` separa o **modelo puro**
+(`shareTargets`: deep links com `encodeURIComponent`) do **efeito colateral**
+(`openExternal`/`shareGame`, defensivos/SSR-safe). WhatsApp/Telegram/X têm intent
+web confiável; **Instagram/TikTok não têm** intent web de texto/URL ⇒ caem na
+**Web Share API** nativa (ótima no celular) com fallback de copiar o link e, por
+último, abrir a URL do jogo. Links externos abrem com `noopener,noreferrer`.
+URLs do jogo e de doação (Ko-fi / Buy Me a Coffee) centralizadas em `config/about`
+(dados separados de código). Doação adianta P7-01 (monetização não-invasiva).
+
 ## Decisões em aberto (revisitar quando necessário)
 - Formato compacto de replay (bitpacking de inputs) — hoje é array por tick.
 - Atlas único de sprites vs `Graphics` — só se a performance exigir (Fase 5).

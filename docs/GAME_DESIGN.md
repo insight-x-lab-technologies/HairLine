@@ -238,6 +238,20 @@ não armazenada** (`durationTicks` ⇒ mm:ss; `dateIso` UTC ⇒ data local) num 
 puro `src/ui/stats.ts`; a cena só desenha. O perfil que isso lê é estado do
 jogador, fora da simulação/replay/ranking (ver `ARCHITECTURE.md`, TD-24).
 
+## Home (P6-06)
+
+A tela inicial é a vitrine do jogo: **hero neon** (título HAIRLINE em camadas de
+glow + fundo procedural mais rico que o starfield, tudo render-side, **sem assets
+raster** — fiel à estética vetorial), acesso a todos os modos com a ação primária
+(Endless) em destaque, atalhos de meta-jogo (Hangar/Conquistas/Estatísticas),
+seleção de nave (P6-04) e um **rodapé discreto**: ícones de **compartilhar o
+jogo** (deep links de WhatsApp/Telegram/X; Instagram/TikTok via Web Share nativa
+com fallback de copiar link), **links de doação** (Ko-fi e Buy Me a Coffee) e a
+linha de **versão + © Insight X Lab Game Studio**. O layout é responsivo e
+respeita safe-areas (modelo puro `ui/home`); a versão tem fonte única
+(`config/about`, injetada do `package.json` no build). Nada disso toca a
+simulação. Ver TD-26.
+
 ## Princípios de design inegociáveis
 
 Determinismo (justiça do Diário), dados separados de código, hitbox ≠ sprite,

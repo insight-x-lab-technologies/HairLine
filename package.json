@@ -1,6 +1,6 @@
 {
   "name": "hairline",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "HAIRLINE — bullet hell vertical mobile-first (Phaser 4 + TypeScript + Vite, PWA).",

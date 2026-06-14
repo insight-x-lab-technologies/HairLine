@@ -23,7 +23,7 @@
 
 Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 5 ondas
 autorais, 3 estágios curados, 3 classes de nave**.
-Testes: **374 passando** (50 arquivos). Ver `TEST_STRATEGY.md`.
+Testes: **396 passando** (55 arquivos). Ver `TEST_STRATEGY.md`.
 
 ---
 
@@ -198,7 +198,18 @@ Testes: **374 passando** (50 arquivos). Ver `TEST_STRATEGY.md`.
   teste manual. Ver TD-25, `tests/Ships.test.ts`,
   `tests/{Simulation,Replay,content}.test.ts`.
 - ⬜ **P6-05** Curva de maestria visível (rankings de habilidade).
-- ⬜ **P6-06** New Game Home Redisign. A professional new home with a world class look and feel
+- ✅ **P6-06** Nova home profissional. 4 issues SDD (`docs/issues/P6-06-*.md`):
+  (01) layout via modelo puro `ui/home` (responsivo, safe-areas, rodapé
+  reservado) — `MenuScene` reescrita só desenhando; (02) hero neon (título em
+  camadas de glow + fundo procedural `ui/heroBackground`, **sem assets raster**,
+  fiel à visão); (03) rodapé com **versão de fonte única** (`__APP_VERSION__`
+  via `define`, `config/about`), © Insight X Lab Game Studio e ícones discretos
+  de compartilhamento (`ui/socialLinks`: deep links WhatsApp/Telegram/X + Web
+  Share para Instagram/TikTok); (04) doação Ko-fi + Buy Me a Coffee (URLs em
+  `config/about`, adianta P7-01). `package.json` → `0.1.0`. Ver TD-26,
+  `tests/{home-ui,heroBackground,about,socialLinks,socialLinks.dom}.test.ts`.
+  Falta apenas a verificação manual com `npm run dev`.
+
 ---
 
 ## FASE 7 — Monetização leve ⬜
