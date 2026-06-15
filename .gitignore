@@ -6,3 +6,8 @@ __pycache__/
 dist/
 build/
 .DS_Store
+
+# Artefatos de runtime do dev-server (scripts/run.sh)
+scripts/.webapplab-http-server.pid
+scripts/.webapplab-http-server.urls
+scripts/webapplab-http-server.log
