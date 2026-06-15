@@ -1,11 +1,14 @@
 import Phaser from 'phaser';
 import { SceneKeys } from '../config/sceneKeys';
 import { VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '../config/layout';
+import { resolveTheme } from '../config/themes';
+import { getSave } from '../services/SaveService';
 
 /**
- * PreloadScene — carrega assets e mostra uma barra de progresso. Na Fase 0 não
- * há assets reais (estilo neon é desenhado por código), então apenas exibe um
- * progresso simbólico e segue para o Menu. Aqui entrarão atlas/áudio na Fase 1+.
+ * PreloadScene — carrega assets e mostra uma barra de progresso. Carregamento
+ * CONDICIONAL pelo tema ativo (P10-04): só o manifesto do tema escolhido entra,
+ * nunca assets de outro tema "por via das dúvidas". O tema vetorial (arcade) é
+ * desenhado por código e não tem manifesto ⇒ nada além do simbólico é carregado.
  */
 export class PreloadScene extends Phaser.Scene {
   constructor() {
@@ -37,8 +40,16 @@ export class PreloadScene extends Phaser.Scene {
       fill.destroy();
     });
 
-    // Carregamento simbólico para a barra ter o que mostrar na Fase 0.
+    // Carregamento simbólico para a barra ter o que mostrar (sem assets de tema).
     this.load.image('__favicon', 'favicon.svg');
+
+    // Manifesto do tema ATIVO apenas (P10-04). Vetorial = lista vazia (no-op);
+    // o tema "polido" registrará atlas/áudio e só estes serão carregados.
+    const theme = resolveTheme(getSave().getSelectedThemeId());
+    for (const asset of theme.assets) {
+      if (asset.type === 'audio') this.load.audio(asset.key, asset.url);
+      else this.load.image(asset.key, asset.url);
+    }
   }
 
   create(): void {

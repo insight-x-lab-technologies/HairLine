@@ -127,6 +127,15 @@ Toque: arrastar = mover; (2º toque/botão direito = Foco — refinar mobile);
 botão PULSO. Teclado: WASD/setas, Shift/Z = Foco, Espaço/X = pulso, ESC/P =
 pausa. Abstraídos em `InputService` → eventos `move`/`focus`/`pulse`.
 
+**Controle relativo no toque (P10-01).** No celular o controle é **relativo
+(offset/drag)** por default: a nave anda pelo **delta** do arraste, então o dedo
+fica **afastado** da nave/hitbox (antes o dedo cobria a nave). O feel
+(sensibilidade + fator no Foco, que reduz a sensibilidade para precisão) vem de
+`src/data/controls.json` — presentation-only, fora da sim. O **mouse no desktop
+segue absoluto** (cursor naturalmente deslocado). Toggle OFFSET×DIRETO no Menu,
+persistido no `SaveService`. A sim **continua recebendo `moveX/moveY` absoluto**
+(o alvo já resolvido) ⇒ determinismo/replay/Diário intactos. Ver TD-27.
+
 ## Feedback / juice (estado)
 
 Tuning de feel em `src/data/effects.json` (P5-01-01) e `src/data/audio.json`
@@ -177,6 +186,23 @@ escolhidas (tamanho constante entre naves — hitbox ≠ sprite), os tiros e sua
 faíscas usam a cor escolhida, e o preset de trilha é repassado ao
 `AudioService` (`setMusicPreset`, variação só de síntese). Nada disso chega à
 simulação — determinismo coberto por teste de regressão (`tests/hangar.test.ts`).
+
+## Temas de apresentação — `src/config/themes.ts` (P10-04)
+
+Acima dos cosméticos individuais, o **tema de apresentação** escolhe o *estilo
+inteiro* do jogo — qual **renderer** (visual) e qual **áudio** o jogo usa.
+Hoje há um: **"Arcade anos 80"** (neon vetorial + síntese), o visual/áudio atual;
+o **"Polido"** (sprites + samples) chega no Bloco C e aparece **sozinho** no
+seletor ao se registrar. Como o cosmético, o tema é **só apresentação**: nunca
+toca a simulação/replay/ranking/Diário (mesma seed/inputs ⇒ mesmo resultado em
+qualquer tema). A escolha é **persistida no aparelho** e cai graciosamente no
+default `arcade` se ausente/inválida.
+
+O seletor fica no **Menu** (linha de utilidades, ao lado de controle/vibração):
+um overlay lista os temas do registro com o atual marcado; tocar persiste, aplica
+o áudio na hora (vale já no menu) e passa a valer no visual na próxima run. O
+`PreloadScene` carrega **só** os assets do tema ativo (o vetorial não tem
+nenhum — não pesa o bundle de quem joga "Arcade"). Ver TD-30.
 
 ## Classes de nave — `src/data/ships.json` (P6-04)
 

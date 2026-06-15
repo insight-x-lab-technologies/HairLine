@@ -44,7 +44,10 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
 - **`src/entities/`**: `BulletPool` (com aceleração), `EnemyPool` — **pools
   pré-alocados**, nunca `new` no loop.
 - **`src/services/`**: `Rng` (mulberry32), `InputService`, `SafeArea`,
-  `AudioService` (Web Audio procedural), `SaveService` (**perfil local**: recorde,
+  `AudioService` (**fachada** de áudio — P10-03: concentra o transversal
+  [contexto Web Audio, master, **mute**, **ducking**, `SfxPolicy`, ruído
+  pré-gerado, autoplay/gesto] e **delega** a síntese/trilha ao `AudioTheme`
+  ativo; interface de consumo estável), `SaveService` (**perfil local**: recorde,
   totais, recordes por modo, conquistas e histórico de runs), `PlayerIdentity`,
   `DailySeed`, `ShareCard`, `ShareImage`, `LeaderboardService` (Local + Remote).
   - **Perfil local (P6-03):** estado do **jogador**, não do jogo — nunca entra na
@@ -57,18 +60,57 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   getPattern/getEnemyDef/getBoss/getWave/getStage/**getEffects/getAudioConfig** +
   listas de ids, validação de bosses/estágios/**effects/audio** no load) e
   `types.ts`. Único ponto de `cast` dos JSON.
+- **`src/services/audio/`** (sem Phaser, presentation-only — P10-03): **temas de
+  áudio**. `AudioTheme.ts` é a **interface** do que varia por tema (`playCue`,
+  `startMusic`/`setLayerTargets`/`stopMusic`, `setMusicPreset`), recebendo o
+  `AudioBackend` transversal (ctx/master/musicGain/noiseBuffer) que a fachada
+  `AudioService` provê. `SynthAudioTheme.ts` é a 1ª implementação = a síntese
+  procedural neon atual **realocada** (blip/sweep/arp/noiseBurst, trilha em 4
+  camadas, `MUSIC_PRESETS`). Um `SampleAudioTheme` futuro (P10-12) entra aqui sem
+  tocar a fachada. O preset de trilha (cosmético `music`) é **por-tema**. Ver TD-29.
 - **`src/data/`**: JSON de patterns/enemies/bosses/waves/**stages**/**ships** +
   difficulty/player/combat/**effects/audio**.
-- **`src/scenes/`** (Phaser): Boot, Preload, Menu, Game, Pause, Results.
+- **`src/render/`** (Phaser, presentation-only — P10-02): **temas de render**.
+  `GameRenderer.ts` é a **interface** do desenho do gameplay (init/setHudPad/
+  updateBackground/reactToCue/consumeFx/advanceFx/draw/destroy), modelada por
+  **intenção** (desenhar a nave/inimigo em x,y na sua forma/cor), não por
+  primitivas de `Graphics`, para comportar um `SpriteTheme` futuro (P10-09) sem
+  reescrita. `VectorTheme.ts` é a 1ª implementação = o **neon vetorial atual**
+  realocado (nave, inimigos, chefe, balas, tiros, partículas, anel de graze,
+  barra de Foco, fundo estelar, fx do pulso + loadout cosmético). O tema só **lê**
+  o estado autoritativo da sim e cria `Graphics`/pools no `init` (sem `new` no
+  loop). A `GameScene` cria o tema e **delega** o desenho. Ver TD-28.
+  `createRenderer.ts` (P10-04) resolve o `rendererId` do registro de temas para a
+  implementação concreta — costura Phaser-side que mantém o registro dado puro.
+- **`src/scenes/`** (Phaser): Boot, Preload, Menu, Game, Pause, Results. A
+  `GameScene` é o **driver de apresentação** (loop, input, áudio, HUD textual,
+  botões, anúncios de estágio e hit-stop) e **delega todo o desenho do mundo** ao
+  `GameRenderer` ativo (P10-02). O hit-stop fica na cena (controla o loop): o tema
+  consome os fx e devolve a duração; a cena aplica.
 - **`src/ui/`**: `neonText`, `shapes` (polígonos), `hudLayout` (safe-areas),
   **`ParticlePool`** (partículas decorativas, sem Phaser) e **`HitStop`** (lógica
   pura do congelamento). Camada de **FX render-side** (P5): a `GameScene` lê o
   buffer `Simulation.fxEvents` (decorativo, fora do `hashState`) e dispara
   partículas/hit-stop; `services/MusicDirector` + `SfxPolicy` (puros) dirigem o
   áudio dinâmico; `services/HapticsService` faz a vibração.
+- **Temas de apresentação (P10-04):** `config/themes` é o **registro único** —
+  dado puro (sem Phaser/áudio, testável headless) que lista os temas (`id`,
+  `label`, `rendererId`, `audioThemeId`, `assets`). `resolveTheme(id)` cai no
+  default (`arcade`) para id ausente/desconhecido. As factories `render/
+  createRenderer` e `services/audio/createAudioTheme` resolvem id→implementação.
+  Tema é **estado do jogador** (chave `hairline.theme.v1` no `SaveService`,
+  presentation-only, **fora da sim/replay/hash/Diário**). O `PreloadScene`
+  carrega só `assets` do tema ativo (vetorial = nenhum); a `GameScene` resolve o
+  tema no `create()` (renderer via `createRenderer`, áudio via
+  `AudioService.useAudioTheme` — no-op se já ativo) sem lookup no loop. Ver TD-30.
 - **`src/config/`**: `layout` (virtual 720×1280, 60Hz), `gameConfig`, `sceneKeys`,
   **`about`** (P6-06: fonte única de versão via `__APP_VERSION__` injetado por
-  `define`, estúdio, URL do jogo, frase de share e links de doação).
+  `define`, estúdio, URL do jogo, frase de share e links de doação) e
+  **`controls`** (P10-01: lê `data/controls.json` — esquema/sensibilidade do
+  toque). **Presentation-only:** `config/controls` **não** é importável por
+  `src/sim` (o JSON fica fora de `content/index.ts`, que a sim importa); a
+  sensibilidade nunca entra na sim/replay/hash. A cena resolve o alvo absoluto e
+  só ele chega à `Simulation`. Ver TD-27.
 - **Home (P6-06):** `ui/home` (modelo de layout puro, responsivo/safe-areas, com
   rodapé reservado), `ui/heroBackground` (geometria decorativa procedural via
   `Rng`) e `ui/socialLinks` (alvos de share puros + `openExternal`/`shareGame`
@@ -109,5 +151,6 @@ não-bloqueante. CI em `.github/workflows/`.
 - Novo padrão/inimigo/chefe/onda/**estágio** → JSON em `src/data/` + registrar em
   `content/index.ts`.
 - Nova mecânica de jogo → `src/systems/*` (puro) + plugar em `Simulation.tick`.
-- Novo efeito visual/som → `scenes/GameScene` ou `services/AudioService` (nunca na sim).
+- Novo efeito visual → `render/` (tema ativo, ex.: `VectorTheme`); som →
+  `services/AudioService` (nunca na sim).
 - Novo modo → `GameMode` em `types.ts` + branch no tick + opção no Menu.

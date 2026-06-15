@@ -41,6 +41,23 @@ export interface InputServiceOptions {
   readonly pulseKeys?: readonly string[];
   /** Velocidade do movimento por teclado, em px do mundo por segundo. */
   readonly keyboardSpeed?: number;
+  /**
+   * Esquema de controle do TOQUE (P10-01). `'relative'` (default): a nave anda
+   * pelo DELTA do arraste, mantendo o dedo afastado da hitbox. `'absolute'`: a
+   * nave persegue o dedo (comportamento legado). O MOUSE é sempre absoluto
+   * (cursor naturalmente deslocado), independentemente deste valor.
+   */
+  readonly touchScheme?: 'relative' | 'absolute';
+  /** Multiplicador do delta de arraste no modo relativo. Default 1. */
+  readonly sensitivity?: number;
+  /** Fator de sensibilidade no modo Foco (precisão). Default 1 (sem mudança). */
+  readonly focusSensitivityFactor?: number;
+  /**
+   * Limites do mundo virtual para clampar a âncora no modo relativo. Evita que
+   * o alvo acumule muito além da parede e o arraste de volta "não responda".
+   * A cena ainda aplica seu próprio clamp (área jogável/safe-area) por cima.
+   */
+  readonly bounds?: { readonly width: number; readonly height: number };
 }
 
 const DEFAULT_FOCUS_KEYS = ['Shift', 'Control', 'z', 'Z'] as const;
@@ -57,10 +74,20 @@ export class InputService {
   private readonly pulseKeys: ReadonlySet<string>;
   private readonly keyboardSpeed: number;
 
+  /** Config do controle de toque (P10-01). */
+  private touchScheme: 'relative' | 'absolute';
+  private readonly sensitivity: number;
+  private readonly focusSensitivityFactor: number;
+  private readonly bounds: { width: number; height: number } | null;
+
   /** Estado de Foco efetivo (toque OU teclado). */
   private pointerFocus = false;
   private keyboardFocus = false;
   private dragging = false;
+  /** Se o arraste corrente é relativo (decidido no pointerdown pelo tipo). */
+  private dragRelative = false;
+  /** Última posição do ponteiro no mundo (base do delta no modo relativo). */
+  private readonly lastPointer = { x: 0, y: 0 };
 
   /** Direção atual do movimento por teclado: cada eixo em {-1, 0, 1}. */
   private readonly keyDir = { x: 0, y: 0 };
@@ -78,6 +105,20 @@ export class InputService {
     this.focusKeys = new Set(opts.focusKeys ?? DEFAULT_FOCUS_KEYS);
     this.pulseKeys = new Set(opts.pulseKeys ?? DEFAULT_PULSE_KEYS);
     this.keyboardSpeed = opts.keyboardSpeed ?? 900;
+    this.touchScheme = opts.touchScheme ?? 'relative';
+    this.sensitivity = opts.sensitivity ?? 1;
+    this.focusSensitivityFactor = opts.focusSensitivityFactor ?? 1;
+    this.bounds = opts.bounds ? { width: opts.bounds.width, height: opts.bounds.height } : null;
+  }
+
+  /**
+   * Semeia o alvo interno (ex.: posição inicial da nave) SEM emitir 'move'. No
+   * modo relativo, o próximo `pointerdown` ancora a partir deste ponto, então a
+   * nave não dá salto no primeiro toque. Chamar no início e ao reatachar.
+   */
+  seedTarget(x: number, y: number): void {
+    this.target.x = x;
+    this.target.y = y;
   }
 
   // ---- Assinatura de eventos lógicos -------------------------------------
@@ -142,20 +183,44 @@ export class InputService {
 
   private onPointerDown = (e: PointerEvent): void => {
     this.dragging = true;
+    // Mouse é sempre absoluto; o toque segue o esquema configurado (P10-01).
+    this.dragRelative = e.pointerType !== 'mouse' && this.touchScheme === 'relative';
     // Segundo toque ativa Foco no celular; no mouse, o botão direito.
     if (e.pointerType === 'mouse' ? e.button === 2 : this.isSecondaryTouch()) {
       this.pointerFocus = true;
       this.emitFocus();
     }
     const w = this.mapper.toWorld(e.clientX, e.clientY);
-    this.emitMove(w.x, w.y);
+    // (Re)ancora: no relativo NÃO pula a nave para o dedo — só registra o ponto
+    // de toque como base do delta. No absoluto, mantém o salto legado.
+    this.lastPointer.x = w.x;
+    this.lastPointer.y = w.y;
+    if (!this.dragRelative) this.emitMove(w.x, w.y);
   };
 
   private onPointerMove = (e: PointerEvent): void => {
     if (!this.dragging) return;
     const w = this.mapper.toWorld(e.clientX, e.clientY);
-    this.emitMove(w.x, w.y);
+    if (!this.dragRelative) {
+      this.emitMove(w.x, w.y);
+      return;
+    }
+    // Relativo: alvo += (delta do dedo) × sensibilidade (reduzida no Foco). O
+    // acúmulo é incremental a partir do alvo corrente — somar deltas com fator
+    // constante equivale a base + Σdeltas × sensibilidade.
+    const k = this.sensitivity * (this.focus ? this.focusSensitivityFactor : 1);
+    const nx = this.clampAxis(this.target.x + (w.x - this.lastPointer.x) * k, 'width');
+    const ny = this.clampAxis(this.target.y + (w.y - this.lastPointer.y) * k, 'height');
+    this.lastPointer.x = w.x;
+    this.lastPointer.y = w.y;
+    this.emitMove(nx, ny);
   };
+
+  private clampAxis(v: number, axis: 'width' | 'height'): number {
+    if (!this.bounds) return v;
+    const max = this.bounds[axis];
+    return v < 0 ? 0 : v > max ? max : v;
+  }
 
   private onPointerUp = (): void => {
     this.dragging = false;

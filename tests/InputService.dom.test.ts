@@ -27,12 +27,13 @@ describe('InputService — canal de input abstrato (docs/02 §5.4)', () => {
     el.remove();
   });
 
-  it('arrastar (toque/mouse) emite eventos lógicos "move" no mundo virtual', () => {
+  it('arrastar o MOUSE emite eventos lógicos "move" no mundo virtual', () => {
     const moves: Array<{ x: number; y: number }> = [];
     svc.on('move', (m) => moves.push(m));
 
-    el.dispatchEvent(pointer('pointerdown', { clientX: 100, clientY: 200 }));
-    el.dispatchEvent(pointer('pointermove', { clientX: 150, clientY: 260 }));
+    // Mouse é sempre absoluto (persegue o cursor), default ou não.
+    el.dispatchEvent(pointer('pointerdown', { pointerType: 'mouse', clientX: 100, clientY: 200 }));
+    el.dispatchEvent(pointer('pointermove', { pointerType: 'mouse', clientX: 150, clientY: 260 }));
 
     expect(moves).toEqual([
       { x: 100, y: 200 },
@@ -100,5 +101,112 @@ describe('InputService — canal de input abstrato (docs/02 §5.4)', () => {
     svc.detach();
     el.dispatchEvent(pointer('pointerdown', { clientX: 1, clientY: 1 }));
     expect(moves).toHaveLength(0);
+  });
+});
+
+describe('InputService — controle de toque RELATIVO (P10-01)', () => {
+  let el: HTMLElement;
+  let svc: InputService;
+  let moves: Array<{ x: number; y: number }>;
+
+  beforeEach(() => {
+    el = document.createElement('div');
+    document.body.appendChild(el);
+    svc = new InputService(el, identityMapper, {
+      touchScheme: 'relative',
+      sensitivity: 1,
+      focusSensitivityFactor: 0.5,
+      bounds: { width: 1000, height: 1000 },
+    });
+    svc.attach();
+    moves = [];
+    svc.on('move', (m) => moves.push(m));
+  });
+
+  afterEach(() => {
+    svc.detach();
+    el.remove();
+  });
+
+  it('pointerdown NÃO pula a nave para o dedo (não emite move absoluto)', () => {
+    svc.seedTarget(500, 500);
+    el.dispatchEvent(pointer('pointerdown', { clientX: 100, clientY: 200 }));
+    expect(moves).toHaveLength(0);
+    expect(svc.moveTarget).toEqual({ x: 500, y: 500 });
+  });
+
+  it('arrastar move por delta a partir do alvo ancorado (base + Σdeltas)', () => {
+    svc.seedTarget(500, 500);
+    el.dispatchEvent(pointer('pointerdown', { clientX: 100, clientY: 100 }));
+    el.dispatchEvent(pointer('pointermove', { clientX: 130, clientY: 90 })); // Δ(+30,-10)
+    el.dispatchEvent(pointer('pointermove', { clientX: 150, clientY: 90 })); // Δ(+20, 0)
+    expect(moves).toEqual([
+      { x: 530, y: 490 },
+      { x: 550, y: 490 },
+    ]);
+  });
+
+  it('novo pointerdown reancora (não dá salto ao soltar e tocar de novo)', () => {
+    svc.seedTarget(500, 500);
+    el.dispatchEvent(pointer('pointerdown', { clientX: 100, clientY: 100 }));
+    el.dispatchEvent(pointer('pointermove', { clientX: 200, clientY: 100 })); // alvo → 600
+    window.dispatchEvent(pointer('pointerup', {}));
+    moves.length = 0;
+    // Toca longe; não deve saltar — só conta o delta a partir deste novo toque.
+    el.dispatchEvent(pointer('pointerdown', { clientX: 900, clientY: 900 }));
+    expect(moves).toHaveLength(0);
+    el.dispatchEvent(pointer('pointermove', { clientX: 910, clientY: 900 })); // Δ(+10,0)
+    expect(moves).toEqual([{ x: 610, y: 500 }]);
+  });
+
+  it('modo Foco reduz a sensibilidade pelo fator configurado', () => {
+    svc.seedTarget(500, 500);
+    // Foco via tecla Shift (default focusKeys).
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
+    el.dispatchEvent(pointer('pointerdown', { clientX: 100, clientY: 100 }));
+    el.dispatchEvent(pointer('pointermove', { clientX: 200, clientY: 100 })); // Δ100 × 0.5
+    expect(moves).toEqual([{ x: 550, y: 500 }]);
+  });
+
+  it('clampa a âncora aos limites do mundo (não acumula além da parede)', () => {
+    svc.seedTarget(990, 500);
+    el.dispatchEvent(pointer('pointerdown', { clientX: 0, clientY: 0 }));
+    el.dispatchEvent(pointer('pointermove', { clientX: 100, clientY: 0 })); // tenta 1090 → clampa 1000
+    expect(moves.at(-1)).toEqual({ x: 1000, y: 500 });
+  });
+
+  it('o MOUSE permanece absoluto mesmo com esquema relativo', () => {
+    svc.seedTarget(500, 500);
+    el.dispatchEvent(pointer('pointerdown', { pointerType: 'mouse', clientX: 100, clientY: 200 }));
+    expect(moves).toEqual([{ x: 100, y: 200 }]);
+  });
+});
+
+describe('InputService — esquema ABSOLUTO no toque (legado, opt-in)', () => {
+  let el: HTMLElement;
+  let svc: InputService;
+
+  beforeEach(() => {
+    el = document.createElement('div');
+    document.body.appendChild(el);
+    svc = new InputService(el, identityMapper, { touchScheme: 'absolute' });
+    svc.attach();
+  });
+
+  afterEach(() => {
+    svc.detach();
+    el.remove();
+  });
+
+  it('o toque persegue o dedo (comportamento anterior preservado)', () => {
+    const moves: Array<{ x: number; y: number }> = [];
+    svc.on('move', (m) => moves.push(m));
+    svc.seedTarget(500, 500);
+    el.dispatchEvent(pointer('pointerdown', { clientX: 100, clientY: 200 }));
+    el.dispatchEvent(pointer('pointermove', { clientX: 150, clientY: 260 }));
+    expect(moves).toEqual([
+      { x: 100, y: 200 },
+      { x: 150, y: 260 },
+    ]);
   });
 });

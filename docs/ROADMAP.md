@@ -6,7 +6,8 @@
 > aqui ficam status e escopo curto de cada item.
 >
 > **Status:** ✅ feito · 🟡 parcial · ⬜ a fazer · ⏸️ adiado de propósito.
-> **Atualizado:** 2026-06 (durante a Fase 4).
+> **Atualizado:** 2026-06 (Fase 4 em andamento; Fase 10 — temas visuais/áudio —
+> planejada e priorizada em 2026-06-15).
 > **Convenção de ID:** `P{fase}-{nn}`. IDs nunca são reaproveitados.
 
 ## Resumo de progresso
@@ -20,10 +21,11 @@
 | 4 | Profundidade de conteúdo | 🟡 em andamento |
 | 5 | Polimento, "juice" e áudio | 🟡 P5-01/02/04 feitas; falta P5-05/06 |
 | 6–9+ | Meta-jogo → visão | ⬜ a fazer |
+| 10 | Repaginação visual & áudio: temas selecionáveis | ⬜ planejada (priorizada) |
 
 Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 5 ondas
 autorais, 3 estágios curados, 3 classes de nave**.
-Testes: **396 passando** (55 arquivos). Ver `TEST_STRATEGY.md`.
+Testes: **405 passando** (55 arquivos). Ver `TEST_STRATEGY.md`.
 
 ---
 
@@ -242,6 +244,139 @@ Testes: **396 passando** (55 arquivos). Ver `TEST_STRATEGY.md`.
 - ⬜ **P9-08** Variantes de gênero reusando o engine de balas.
 - ⬜ **P9-09** Procedural generativo de chefes (montados por peças).
 - ⬜ **P9-10** Mod/API pública de padrões de bala.
+
+---
+
+## FASE 10 — Repaginação visual & áudio: temas selecionáveis ⬜
+
+> **Priorizada por decisão do usuário (2026-06-15).** Apesar do número, vem antes
+> das Fases 7–9. Origem: revisão do "look & feel" — a base de sistemas está
+> sólida, mas a pele ainda não é profissional: a nave parece **5 primitivos
+> soltos** (glow + chama + asa + corpo + hitbox), inimigos/chefes são geométricos
+> (os **chefes são `fillCircle` puro**), os SFX são síntese "Atari 2600" e, no
+> celular, o **dedo cobre a nave** e a hitbox.
+>
+> **Estratégia (validada em sessão de análise).** Tudo o que define o "look" vive
+> na **camada de apresentação** (`scenes/GameScene`, `ui/*`,
+> `services/AudioService`/`InputService`); **nada toca a sim**. Logo dá para
+> introduzir um **tema de apresentação selecionável** — "Arcade anos 80"
+> (vetorial, o atual, elevado) e "Polido" (arte raster + áudio real) — sem risco
+> para determinismo, replays, Diário, ranking ou anti-cheat. Tema é **estado do
+> jogador** (como mudo/cosméticos), persistido no `SaveService`, **fora da
+> sim/replay/hash**. Princípios mantidos: **legibilidade do perigo > beleza**
+> (balas e anel de graze permanecem **neon vetorial nos dois temas**) e
+> **hitbox ≠ sprite**.
+>
+> **Vetorial = padrão gerativo** (desenha qualquer conteúdo a partir dos dados da
+> sim — `shapePoints` por forma/cor —, custo zero por conteúdo novo). **Sprite =
+> camada por cima** que fornece arte onde existe e **cai no vetorial onde ainda
+> não há asset** ⇒ arte produzida incrementalmente, sem nunca deixar o jogo
+> inconsistente/injogável. O custo de *código* de fazer os dois ≈ custo do tema
+> sprite sozinho + a abstração; o custo real é **produção de arte/áudio**.
+>
+> **Sequência deliberada:** Bloco A (fundação, barato, já) → Bloco B (eleva o
+> vetorial, sem assets) → Bloco C (produção de arte/áudio, incremental). O Bloco
+> C só cobra o "imposto de dois temas" quando a arte sprite realmente existir.
+
+### Bloco A — Fundação (barato, imediato)
+
+- ✅ **P10-01** **Controle mobile relativo (offset/drag).** Implementado: o
+  `InputService` ganhou esquema **relativo no toque** (default) — `pointerdown`
+  ancora (não pula a nave para o dedo), `pointermove` acumula o alvo `+= delta ×
+  sensibilidade` (clamp ao mundo), reancorando a cada toque e no `RESUME`. Feel
+  em `src/data/controls.json` lido por `src/config/controls.ts`
+  (presentation-only, **fora da sim**); o Foco reduz a sensibilidade. A sim segue
+  recebendo o **alvo absoluto** já resolvido ⇒ replays/Diário intactos
+  (`verifyReplay` verde). **Mouse permanece absoluto** (decisão registrada).
+  Toggle OFFSET×DIRETO no Menu, persistido no `SaveService`
+  (`hairline.controlScheme.v1`). Ver TD-27, `tests/InputService.dom.test.ts`,
+  `tests/SaveService.test.ts`.
+
+- ✅ **P10-02** **Abstração de tema de render (`GameRenderer`/`Theme`).**
+  Implementado: nova camada `src/render/` com a **interface** `GameRenderer`
+  (init/setHudPad/updateBackground/reactToCue/consumeFx/advanceFx/draw/destroy,
+  modelada por **intenção**, não por primitivas de `Graphics`) e a 1ª
+  implementação **`VectorTheme`** = o neon vetorial atual **realocado** (nave,
+  inimigos, chefe, balas, tiros, partículas, anel de graze, barra de Foco, fundo
+  estelar, fx do pulso + loadout cosmético) — **paridade visual 1:1**. A
+  `GameScene` virou driver de apresentação (loop/input/áudio/HUD/hit-stop) e
+  **delega** todo o desenho; o hit-stop fica na cena (o tema devolve a duração).
+  Presentation-only: nada toca a sim ⇒ replays/Diário byte-idênticos
+  (`verifyReplay` verde, 405 testes). Falta só a conferência visual manual com
+  `npm run dev`. Ver TD-28, `docs/issues/P10-02-abstracao-tema-de-render.md`.
+
+- ✅ **P10-03** **Abstração de tema de áudio (`AudioTheme`/`SynthAudioTheme`).**
+  Implementado: nova pasta `src/services/audio/` com a **interface** `AudioTheme`
+  (`playCue`/`startMusic`/`setLayerTargets`/`stopMusic`/`setMusicPreset`, recebendo
+  o `AudioBackend` transversal: ctx/master/musicGain/noiseBuffer) e a 1ª
+  implementação **`SynthAudioTheme`** = a síntese procedural atual **realocada**
+  (blip/sweep/arp/noiseBurst, trilha em 4 camadas, `MUSIC_PRESETS`) — **sem
+  mudança audível**. O `AudioService` virou **fachada**: concentra o transversal
+  (contexto, master, **mute** persistido, **ducking**, `SfxPolicy`, ruído
+  pré-gerado, autoplay/gesto) e **delega** ao tema; a interface de consumo
+  (`play`, `startMusic`, `setLayerTargets`, `setMusicPreset`, `previewMusic`,
+  `toggleMute`) não mudou. Preset é por-tema (o de samples definirá os seus em
+  P10-12). Presentation-only: nada toca a sim ⇒ determinismo intacto (410 testes,
+  novo `tests/AudioService.dom.test.ts` cobre no-op sem Web Audio + delegação com
+  tema spy). Falta só a conferência audível manual com `npm run dev`. Ver TD-29,
+  `docs/issues/P10-03-abstracao-tema-de-audio.md`.
+
+- ✅ **P10-04** **Seletor de tema + persistência + carregamento condicional.**
+  Registro único `config/themes` (dado puro: id/rótulo/renderer/áudio/assets;
+  factories `render/createRenderer` + `services/audio/createAudioTheme` resolvem
+  id→implementação). Chave `hairline.theme.v1` no `SaveService` (estado do
+  jogador, fora da sim; inválido ⇒ default arcade). Seletor no Menu (linha de
+  utilidades). `PreloadScene` carrega assets **apenas do tema ativo** — vetorial =
+  nenhum (protege o "Arcade" de peso de bundle/PWA). `GameScene`/áudio resolvem o
+  tema uma vez no `create()`. **Bloco A (fundação) completo.** Ver TD-30 e
+  `docs/issues/P10-04-seletor-de-tema.md`.
+
+### Bloco B — Nível 1: "Arcade anos 80" deliberado (vetorial, sem assets)
+
+- ⬜ **P10-05** **Nave como silhueta coesa.** Redesenhar `makeShip` (no
+  `VectorTheme`) para uma forma única e legível em vez de 5 primitivos soltos.
+  Manter **hitbox ≠ sprite**, o anel de graze e a chama do motor; respeitar
+  forma/cor do cosmético (P6-01). Objetivo: parecer uma nave, não uma montagem.
+
+- ⬜ **P10-06** **Inimigos e chefes vetoriais com identidade.** Compor formas com
+  caráter por tipo/fase em vez de polígono genérico e `fillCircle`, mantendo
+  legíveis os telegraphs, escudo, partes destrutíveis e teleporte (`drawBoss`).
+  Continua gerativo a partir dos dados.
+
+- ⬜ **P10-07** **Fundo de espaço procedural rico + parallax multicamada.**
+  Evoluir o starfield (`drawField`/`updateBackground`) para camadas de
+  profundidade, nebulosas (gradientes) e parallax — render-side, `Rng`
+  decorativo (sem `Math.random`, sem afetar a sim).
+
+- ⬜ **P10-08** **Áudio "Arcade" melhorado.** Refinar a síntese (trilha de menu +
+  gameplay, SFX de explosão/impacto melhores) **sem** introduzir assets — elevando
+  o `SynthAudioTheme` à altura de um "arcade anos 80" intencional.
+
+### Bloco C — Nível 2: tema "Polido" (arte raster + áudio real, produção incremental)
+
+- ⬜ **P10-09** **`SpriteTheme` (código) com fallback vetorial.** Implementação que
+  desenha **sprites** lendo as mesmas posições da sim; onde faltar asset, **cai no
+  `VectorTheme`**. Pipeline de atlas no `PreloadScene`; pooling de sprites
+  (espelha o pooling existente — nunca `new` no loop). Sem nova lógica de jogo.
+
+- ⬜ **P10-10** **Arte raster incremental:** nave → chefes → inimigos (nesta
+  ordem), cada peça substituível sem quebrar o jogo (o que não tem arte continua
+  vetorial). Mapear estados visuais aos dados já existentes (dano/i-frames, fase do
+  chefe, partes, escudo).
+
+- ⬜ **P10-11** **Fundo de espaço em arte (parallax raster).** Camadas ilustradas
+  substituindo o procedural quando o tema Polido está ativo.
+
+- ⬜ **P10-12** **Áudio real (samples).** `SampleAudioTheme` atrás de `play(cue)`:
+  música de menu + trilha de gameplay (mantendo a dinâmica do `MusicDirector`/
+  camadas) + SFX de explosão/impacto/pulso por samples. Carregamento condicional
+  (só com o tema de áudio real ativo).
+
+- ⬜ **P10-13** **Cruzamento tema × cosméticos.** Decisão e implementação: os
+  cosméticos (forma/cor de nave, cor de tiro — P6-01) valem **plenos no
+  vetorial**; no sprite, um **conjunto curado** de variantes de arte (evita
+  multiplicar conteúdo). Garantir **balas e anel de graze em neon vetorial nos
+  dois temas** (legibilidade). Possível gancho de cosmético/monetização (P7).
 
 ---
 

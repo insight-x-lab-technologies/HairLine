@@ -289,6 +289,150 @@ web confiável; **Instagram/TikTok não têm** intent web de texto/URL ⇒ caem 
 URLs do jogo e de doação (Ko-fi / Buy Me a Coffee) centralizadas em `config/about`
 (dados separados de código). Doação adianta P7-01 (monetização não-invasiva).
 
+## TD-27 — Controle de toque relativo: sensibilidade NÃO entra na sim (P10-01) ✅
+**Problema:** no celular o `InputService` emitia a posição **absoluta** do dedo e
+a nave perseguia esse ponto ⇒ o dedo cobria a nave e a hitbox (não dava para ver
+se estava desviando). **Decisão:** controle **relativo (offset/drag)** no toque —
+no `pointerdown` ancora (não pula a nave para o dedo); no `pointermove` o alvo
+acumula `+= delta × sensibilidade` (incremental a partir do alvo corrente, com
+clamp ao mundo para o arraste de volta não "travar" contra a parede). Reancora a
+cada novo toque e no `RESUME` (sem salto).
+
+**Linha vermelha — determinismo:** a sensibilidade e o esquema são
+**presentation-only** e **nunca** entram na sim, no `ReplayRecorder` ou no
+`hashState()`. O `InputService` resolve o **alvo absoluto** e só esse `moveX/moveY`
+chega à `Simulation` (contrato de `SimInput` inalterado). Logo replays/Diário
+antigos seguem byte-idênticos e `verifyReplay` continua válido. O feel mora em
+`src/data/controls.json`, lido por `src/config/controls.ts` (**não importável por
+`src/sim`** — `content/index.ts` é importado pela sim, então o JSON de controle
+fica fora do registro). O Foco reduz a sensibilidade (precisão), coerente com o
+`focusSpeedFactor` da nave.
+
+**Mouse:** permanece **absoluto** (cursor já deslocado; relativo pioraria o
+desktop) — decisão explícita, coberta por teste. Toggle OFFSET×DIRETO no Menu,
+persistido no `SaveService` (`hairline.controlScheme.v1`; ausente ⇒ default do
+JSON). Aritmética de offset/âncora/Foco/clamp coberta em
+`tests/InputService.dom.test.ts`; persistência em `tests/SaveService.test.ts`.
+
+## TD-28 — Abstração de tema de render (`GameRenderer` + `VectorTheme`) (P10-02) ✅
+**Problema:** a `GameScene` era um "objeto-deus" que misturava ciclo de vida +
+input + áudio + **todo o desenho** do gameplay (nave, inimigos, chefe, balas,
+tiros, partículas, anel de graze, barra de Foco, fundo, fx do pulso). Isso
+impedia o objetivo da Fase 10: **temas de apresentação selecionáveis** (Arcade
+vetorial × Polido sprite) sem tocar a simulação.
+
+**Decisão:** extrair o desenho para uma **interface de tema de render** em
+`src/render/` — `GameRenderer` (init/setHudPad/updateBackground/reactToCue/
+consumeFx/advanceFx/draw/destroy). A `GameScene` passa a **delegar**: cria o tema
+no `create()` e o invoca por frame; não desenha mais nada diretamente. A 1ª
+implementação, **`VectorTheme`**, é o **neon vetorial atual apenas realocado**
+(paridade visual 1:1, sem redesign — isso vem em P10-05/06/07).
+
+**Contrato lê-estado (presentation-only).** O tema só **lê** o estado
+autoritativo da `Simulation` (somente leitura) e cria `Graphics`/pools no `init`
+(sem `new` no loop). Os métodos descrevem **a intenção** (desenhar a nave/inimigo
+em x,y na sua forma/cor), **não** primitivas de `Graphics` (`fillCircle`), para
+que o `SpriteTheme` futuro (P10-09) caiba sem reescrever o contrato. Nada do tema
+entra em `hashState()`, replay, Diário ou ranking; aleatoriedade decorativa segue
+no `Rng` (sem `Math.random`). Cosméticos (forma/cor da nave, cor do tiro) são
+aplicados pelo tema; o preset de **trilha** (áudio) fica na cena.
+
+**Linha vermelha — determinismo.** Refactor mecânico, presentation-only: a
+`Simulation`, o `ReplayRecorder` e a ordem de tick não mudaram ⇒ replays/Diário
+seguem byte-idênticos e `verifyReplay` continua válido (regressão verde em
+`tests/Replay.test.ts`/`Simulation.test.ts`, 405 testes). O desenho não é
+unit-testado (`TEST_STRATEGY.md`); paridade visual é conferência manual.
+
+**Divisão de responsabilidades:** o **hit-stop** fica na cena (controla o
+`loop.advance`) — o tema consome os `fxEvents` (partículas + micro-shake) e
+**devolve** a duração de hit-stop; a cena a aplica. Shake/flash de câmera e o
+"ping" do anel de graze (`reactToCue`) migraram para o tema; HUD textual, botões,
+anúncios de estágio e a posição das safe-areas (`setHudPad`) ficam na cena.
+`init`/`destroy` simétricos; pausar/retomar/resize seguem geridos pela cena. A
+barra de Foco deriva a posição do botão de pulso do `hudPad` (não referencia o
+GameObject). Detalhes: `docs/issues/P10-02-abstracao-tema-de-render.md`.
+
+## TD-29 — Abstração de tema de áudio (`AudioTheme` + `SynthAudioTheme`) (P10-03) ✅
+**Problema:** o `AudioService` era monolítico — misturava o **transversal**
+(contexto Web Audio, master gain, mute persistido, ducking, `SfxPolicy`, ruído
+pré-gerado, autoplay/gesto) com a **síntese** de cada cue e a construção/gestão
+da trilha em camadas. Isso impedia o objetivo da Fase 10: **temas de áudio
+selecionáveis** (synth procedural × samples, P10-12) sem tocar a simulação.
+
+**Decisão:** extrair o que **varia por tema** para uma interface
+`src/services/audio/AudioTheme.ts` — `playCue`, `startMusic`/`setLayerTargets`/
+`stopMusic` e `setMusicPreset`. O `AudioService` vira **fachada**: mantém o
+singleton `getAudio()`, o estado de mute/started/contexto e **delega** ao tema
+ativo. A 1ª implementação, **`SynthAudioTheme`**, é a síntese procedural atual
+(TD-09/TD-20) **apenas realocada** — **paridade audível 1:1**, sem redesign (a
+melhoria "arcade" do synth é P10-08; o seletor/persistência é P10-04).
+
+**O que é transversal × por-tema (linha de divisão).** Fica na **fachada** tudo
+que não muda entre synth e samples: contexto/master, **mute** (persistido em
+`hairline.muted`), **ducking** da trilha (opera no `musicGain`), `SfxPolicy`
+(polifonia/prioridade/`pitchFactor`/`gainFactor`), o **buffer de ruído**
+pré-gerado e a política de autoplay/gesto. Fica no **tema** o que varia: como
+cada cue soa e como a trilha em camadas é construída/dirigida (incl. as ramps).
+A fachada resolve mute + `SfxPolicy.request` **antes** de chamar `playCue` e
+aplica `duckMusic` **depois** — o tema não vê mute nem decide ducking.
+
+**`AudioBackend` (recursos emprestados).** Para o tema não gerir ciclo de vida,
+a fachada passa um `AudioBackend = { ctx, master, musicGain, noiseBuffer }` a
+cada operação. O tema só **usa** esses nodes (sintetiza neles); nunca os cria
+nem destrói. `backend()` retorna `null` sem Web Audio / antes do gesto ⇒ no-op
+silencioso de toda operação (robustez do jsdom/iOS preservada).
+
+**Preset de trilha é por-tema.** O cosmético `music` (TD-22/P6-01-02) seleciona
+um preset de **síntese**; logo `MUSIC_PRESETS` migrou para o `SynthAudioTheme` e
+`setMusicPreset`/`previewMusic` delegam a ele. Regra documentada: cada tema
+declara os seus presets — o synth tem os históricos (`default`/`pulse`); o tema
+de samples (P10-12) definirá os seus. `setMusicPreset` segue funcionando na
+fachada (não fica órfão).
+
+**Linha vermelha — determinismo.** Refactor mecânico, presentation-only: a
+`Simulation`, o `ReplayRecorder` e o `hashState()` não foram tocados — áudio
+nunca entrou na sim. Replays/Diário/ranking seguem byte-idênticos. A síntese
+não é unit-testada (`TEST_STRATEGY.md`): paridade **audível** é conferência
+manual; o novo `tests/AudioService.dom.test.ts` cobre o **contrato da fachada**
+(no-op sem Web Audio, mute persistido, delegação ao tema via spy, mute/ducking
+centrais). `MusicDirector`/`SfxPolicy` (puros) seguem verdes sem alteração.
+
+## TD-30 — Registro de temas + seleção/persistência/carga condicional (P10-04) ✅
+**Problema:** P10-02/03 deram as abstrações (`GameRenderer`/`VectorTheme` e
+`AudioTheme`/`SynthAudioTheme`), mas faltava a **costura**: como o jogador
+escolhe um tema de apresentação, como isso persiste e como carregar **só** os
+assets do tema ativo — sem hardcodar dois temas no seletor nem regredir o peso
+de carga do tema vetorial (que não tem assets).
+
+**Decisão:** uma **fonte única** — `src/config/themes.ts` — lista os temas
+(`id`, `label`, `rendererId`, `audioThemeId`, `assets`). É **dado puro** (sem
+Phaser/Web Audio), logo testável headless; a resolução id→implementação fica em
+duas factories finas — `render/createRenderer` (Phaser) e
+`services/audio/createAudioTheme` (áudio). Assim o seletor, o `PreloadScene` e a
+`GameScene` iteram **um** registro e o tema "polido" (Bloco C) aparece sozinho ao
+se registrar, sem editar consumidor algum.
+
+**Persistência (estado do jogador, não do jogo).** Chave `hairline.theme.v1` no
+`SaveService`, leitura **burra** (id cru ou `null`): a validade é do registro
+(`resolveTheme` cai no default `arcade` para ausente/desconhecido/corrompido) —
+mesmo padrão da classe de nave (TD-…/P6-04) e do esquema de controle (P10-01).
+
+**Carga condicional.** O `PreloadScene` carrega **só** `resolveTheme(...).assets`
+do tema ativo; vetorial = lista vazia ⇒ nada novo (sem requests de "polido").
+
+**Resolução única, sem lookup no loop.** A `GameScene` resolve o tema no
+`create()`: `createRenderer(rendererId)` instancia o `GameRenderer` e
+`AudioService.useAudioTheme(audioThemeId)` troca o tema de áudio — **no-op**
+quando já é o ativo (preserva a trilha do menu; só ao trocar de fato para a
+trilha e substitui o backend de síntese). O seletor do menu aplica o áudio na
+hora; o render passa a valer na próxima run.
+
+**Linha vermelha — determinismo.** Tema é presentation-only: nunca entra em
+`SimulationOptions`, `ReplayRecorder` ou `hashState()`. Mesma seed/inputs com
+qualquer tema ⇒ mesmo hash/replay/ranking. Testes headless cobrem o registro
+(lista/atual/fallback) e a persistência (ida-e-volta, vazio ⇒ default); carga
+condicional e feel são conferência manual (`TEST_STRATEGY.md`). Ver TD-28/TD-29.
+
 ## Decisões em aberto (revisitar quando necessário)
 - Formato compacto de replay (bitpacking de inputs) — hoje é array por tick.
 - Atlas único de sprites vs `Graphics` — só se a performance exigir (Fase 5).

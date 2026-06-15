@@ -3,71 +3,51 @@ import { Rng } from './Rng';
 import { SfxPolicy } from './SfxPolicy';
 import { getAudioConfig } from '../content';
 import type { LayerGains } from './MusicDirector';
+import type { AudioBackend, AudioTheme } from './audio/AudioTheme';
+import { createAudioTheme, DEFAULT_AUDIO_THEME_ID } from './audio/createAudioTheme';
 
 /**
- * AudioService — síntese procedural de SFX + trilha via Web Audio (Fase 2,
- * evoluído na Fase 5). Sem assets: cada som é um envelope de osciladores +
- * ruído, o que combina com a estética neon e evita pipeline de áudio
- * (docs/01 §4.3, TD-09).
+ * AudioService — FACHADA estável de áudio (P10-03). Concentra o que é
+ * **transversal** a qualquer tema e nunca se duplica por tema: contexto Web
+ * Audio, master gain, **mute** (persistido), **ducking** da trilha, `SfxPolicy`
+ * (polifonia/prioridade), buffer de ruído pré-gerado e a política de
+ * autoplay/gesto. Delega a **síntese/apresentação** ao `AudioTheme` ativo —
+ * como cada cue soa e como a trilha em camadas é construída/dirigida.
  *
- * Fase 5:
- *  - Trilha em CAMADAS (P5-04-01): base-pad + rítmica + tensão + perigo, cada
- *    uma com seu `GainNode`; a `GameScene` aplica ganhos-alvo via
- *    `setLayerTargets` (ramps suaves). A decisão é do `MusicDirector` (puro).
- *  - SFX em camadas (P5-04-02): ruído pré-gerado uma vez, variação sutil de
- *    pitch/ganho por disparo (Rng decorativo), polifonia/prioridade via
- *    `SfxPolicy` (puro) e ducking da trilha em eventos grandes.
+ * A interface de consumo (`play`, `startMusic`, `setLayerTargets`,
+ * `setMusicPreset`, `previewMusic`, `toggleMute`, `isMuted`) é estável: a
+ * `GameScene`/cenas não sabem que existe um tema por trás (TD-29).
  *
- * Backend de APRESENTAÇÃO: nunca é tocado pela simulação. Resiliente a
- * ambientes sem Web Audio (no-op) e só inicia após um gesto do usuário.
- * Singleton via getAudio().
+ * Backend de APRESENTAÇÃO: nunca é tocado pela simulação (determinismo
+ * intacto). Resiliente a ambientes sem Web Audio (no-op) e só inicia após um
+ * gesto do usuário. Singleton via getAudio().
+ *
+ * O tema ativo é resolvido do registro (`config/themes`) via `useAudioTheme`
+ * (P10-04): hoje só o `synth` (= áudio histórico, sem mudança audível); o tema
+ * por samples é P10-12. Ver TD-09 (síntese) e TD-29 (abstração de tema).
  */
 const MUTE_KEY = 'hairline.muted';
 
 type CtxLike = AudioContext;
 
-/**
- * Presets de trilha (cosméticos `music` — P6-01-02). Variação só de síntese:
- * frequência da base, oscilador/andamento da rítmica. NÃO afeta jogabilidade.
- * `default` reproduz a trilha histórica; novos presets entram aqui (o catálogo
- * em `cosmetics.json` referencia pela chave).
- */
-interface MusicPreset {
-  readonly baseHz: readonly number[];
-  readonly rhythmType: OscillatorType;
-  readonly rhythmHz: number;
-  readonly pulseHz: number;
-}
-const MUSIC_PRESETS: Readonly<Record<string, MusicPreset>> = {
-  default: { baseHz: [55, 82.5, 110], rhythmType: 'sawtooth', rhythmHz: 110, pulseHz: 2.4 },
-  pulse: { baseHz: [55, 73.42, 110], rhythmType: 'square', rhythmHz: 146.83, pulseHz: 3.6 },
-};
-
-class AudioService {
+export class AudioService {
   private ctx: CtxLike | null = null;
   private master: GainNode | null = null;
   private musicGain: GainNode | null = null;
   /** Ganho-base da trilha (alvo do ducking quando recupera). */
   private musicBaseGain = 0.12;
-  private musicNodes: AudioScheduledSourceNode[] = [];
-  /** Buses de cada camada musical (P5-04-01). */
-  private layerGains: Partial<Record<keyof LayerGains, GainNode>> = {};
-  /** Alvos correntes por camada — escolhe ramp de entrada/saída. */
-  private layerCurrent: { base: number; rhythm: number; tension: number; danger: number } = {
-    base: 0,
-    rhythm: 0,
-    tension: 0,
-    danger: 0,
-  };
-  /** Buffer de ruído branco pré-gerado uma vez (P5-04-02). */
+  /** Buffer de ruído branco pré-gerado uma vez (P5-04-02); provido ao tema. */
   private noiseBuffer: AudioBuffer | null = null;
   private policy: SfxPolicy | null = null;
   private muted = false;
   private started = false;
-  /** Preset de trilha corrente (cosmético `music` — P6-01-02). */
-  private musicPreset = 'default';
+  /** Tema de áudio ativo (síntese/trilha/preset). `useAudioTheme` o troca. */
+  private theme: AudioTheme;
+  /** Id do tema de áudio ativo (P10-04): troca só ocorre quando muda de fato. */
+  private activeAudioThemeId = DEFAULT_AUDIO_THEME_ID;
 
-  constructor() {
+  constructor(theme: AudioTheme = createAudioTheme(DEFAULT_AUDIO_THEME_ID)) {
+    this.theme = theme;
     try {
       this.muted = globalThis.localStorage?.getItem(MUTE_KEY) === '1';
     } catch {
@@ -119,15 +99,31 @@ class AudioService {
     }
   }
 
-  // ---- Trilha em camadas (P5-04-01) --------------------------------------
+  // ---- Tema de áudio ativo (P10-04) --------------------------------------
+
+  /**
+   * Ativa o tema de áudio do tema de apresentação escolhido (resolve o
+   * `audioThemeId` do registro). No-op quando já é o tema ativo — preserva a
+   * trilha do menu sem reconstruir. Ao trocar de fato, **para a trilha** e
+   * substitui o backend de síntese com disciplina (o chamador reaplica preset/
+   * `startMusic`). Presentation-only: nada disto toca a simulação.
+   */
+  useAudioTheme(audioThemeId: string): void {
+    if (audioThemeId === this.activeAudioThemeId) return;
+    this.stopMusic();
+    this.theme = createAudioTheme(audioThemeId);
+    this.activeAudioThemeId = audioThemeId;
+  }
+
+  // ---- Trilha (delegada ao tema ativo) -----------------------------------
 
   /**
    * Define o preset de trilha (cosmético `music` — P6-01-02). Chame ANTES de
-   * `startMusic`; preset desconhecido cai em `default`. Não rebuilda trilha já
-   * tocando (a `GameScene` define antes de iniciar; o preview para e reinicia).
+   * `startMusic`; preset desconhecido cai em `default`. Preset é por-tema (o
+   * synth tem os históricos; o de samples definirá os seus em P10-12).
    */
   setMusicPreset(preset: string): void {
-    this.musicPreset = preset in MUSIC_PRESETS ? preset : 'default';
+    this.theme.setMusicPreset(preset);
   }
 
   /**
@@ -145,250 +141,61 @@ class AudioService {
     this.setLayerTargets({ base: layers.base, rhythm: layers.rhythm, tension: 0, danger: 0 });
   }
 
-  /** Inicia a trilha procedural em camadas (todas em 0 exceto base). Idempotente. */
+  /** Inicia a trilha procedural em camadas (delega ao tema). Idempotente. */
   startMusic(): void {
-    if (!this.started || !this.ctx || !this.musicGain || this.musicNodes.length > 0) return;
-    const ctx = this.ctx;
-    const mk = (initial: number): GainNode => {
-      const g = ctx.createGain();
-      g.gain.value = initial;
-      g.connect(this.musicGain!);
-      return g;
-    };
-    const cfg = getAudioConfig().music;
-    const preset = MUSIC_PRESETS[this.musicPreset] ?? MUSIC_PRESETS.default!;
-    const base = mk(cfg.layers.base);
-    const rhythm = mk(0);
-    const tension = mk(0);
-    const danger = mk(0);
-    this.layerGains = { base, rhythm, tension, danger };
-    this.layerCurrent = { base: cfg.layers.base, rhythm: 0, tension: 0, danger: 0 };
-
-    // Base: acorde-pad grave (do preset) com leve detune + LFO de "respiração".
-    for (const f of preset.baseHz) {
-      const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = f;
-      osc.detune.value = (f % 7) - 3;
-      osc.connect(base);
-      osc.start();
-      this.musicNodes.push(osc);
-    }
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.07;
-    const lfoGain = ctx.createGain();
-    lfoGain.gain.value = 0.05;
-    lfo.connect(lfoGain).connect(base.gain);
-    lfo.start();
-    this.musicNodes.push(lfo);
-
-    // Rítmica: osc pulsado por um LFO quadrado (entra com o nível). O preset
-    // varia timbre/andamento (cosmético `music` — P6-01-02).
-    const rOsc = ctx.createOscillator();
-    rOsc.type = preset.rhythmType;
-    rOsc.frequency.value = preset.rhythmHz;
-    const rPulse = ctx.createGain();
-    rPulse.gain.value = 0.5;
-    rOsc.connect(rPulse).connect(rhythm);
-    const rLfo = ctx.createOscillator();
-    rLfo.type = 'square';
-    rLfo.frequency.value = preset.pulseHz;
-    const rLfoGain = ctx.createGain();
-    rLfoGain.gain.value = 0.5;
-    rLfo.connect(rLfoGain).connect(rPulse.gain);
-    rOsc.start();
-    rLfo.start();
-    this.musicNodes.push(rOsc, rLfo);
-
-    // Tensão: intervalo dissonante (trítono) com leve tremolo — para chefe.
-    for (const f of [138.59, 196.0]) {
-      const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.value = f;
-      osc.connect(tension);
-      osc.start();
-      this.musicNodes.push(osc);
-    }
-
-    // Perigo: oitava brilhante (vida baixa) — sine agudo.
-    const dOsc = ctx.createOscillator();
-    dOsc.type = 'sine';
-    dOsc.frequency.value = 220;
-    dOsc.connect(danger);
-    dOsc.start();
-    this.musicNodes.push(dOsc);
+    const backend = this.backend();
+    if (!backend) return;
+    this.theme.startMusic(backend);
   }
 
-  /**
-   * Aplica os ganhos-alvo por camada com ramps suaves (P5-04-01). Sobe rápido
-   * (`rampMs.in`), desce devagar (`rampMs.out`) para evitar liga-desliga no
-   * limiar. Sem cliques: sempre `linearRampToValueAtTime`.
-   */
+  /** Aplica os ganhos-alvo por camada com ramps suaves (delega ao tema). */
   setLayerTargets(targets: LayerGains): void {
-    if (!this.started || !this.ctx) return;
-    const cfg = getAudioConfig().music.rampMs;
-    const now = this.ctx.currentTime;
-    (Object.keys(targets) as (keyof LayerGains)[]).forEach((k) => {
-      const g = this.layerGains[k];
-      if (!g) return;
-      const target = targets[k];
-      const rising = target > this.layerCurrent[k];
-      const ms = rising ? cfg.in : cfg.out;
-      g.gain.cancelScheduledValues(now);
-      g.gain.setValueAtTime(g.gain.value, now);
-      g.gain.linearRampToValueAtTime(target, now + ms / 1000);
-      this.layerCurrent[k] = target;
-    });
+    const backend = this.backend();
+    if (!backend) return;
+    this.theme.setLayerTargets(backend, targets);
   }
 
-  /** Para a trilha. */
+  /** Para a trilha (delega ao tema). */
   stopMusic(): void {
-    for (const n of this.musicNodes) {
-      try {
-        n.stop();
-      } catch {
-        /* já parado */
-      }
-    }
-    this.musicNodes = [];
-    this.layerGains = {};
-    this.layerCurrent = { base: 0, rhythm: 0, tension: 0, danger: 0 };
+    this.theme.stopMusic();
   }
 
-  // ---- SFX (P5-04-02) ----------------------------------------------------
+  // ---- SFX (transversal: mute/policy/ducking centralizados) --------------
 
   /** Toca um cue de jogo. Sem efeito se mudo/sem contexto ou se a política negar. */
   play(cue: AudioCue): void {
-    if (!this.started || this.muted || !this.ctx) return;
-    const now = this.ctx.currentTime;
+    if (this.muted) return;
+    const backend = this.backend();
+    if (!backend) return;
+    const now = backend.ctx.currentTime;
     const policy = this.policy;
     if (policy && !policy.request(cue, now * 1000)) return;
     const pf = policy ? policy.pitchFactor() : 1;
     const gf = policy ? policy.gainFactor() : 1;
 
-    switch (cue) {
-      case 'graze':
-        this.blip(1400 * pf, 0.05, 'triangle', 0.25 * gf);
-        break;
-      case 'kill':
-        this.blip(320 * pf, 0.12, 'square', 0.3 * gf, 120);
-        this.noiseBurst(0.08, 0.18 * gf, 1800);
-        break;
-      case 'hit':
-        this.blip(140 * pf, 0.28, 'sawtooth', 0.5 * gf, -60);
-        this.noiseBurst(0.16, 0.3 * gf, 600);
-        break;
-      case 'pulse':
-        this.sweep(900 * pf, 180, 0.4, 0.45 * gf);
-        this.noiseBurst(0.18, 0.12 * gf, 2600);
-        break;
-      case 'gameover':
-        this.sweep(440, 70, 0.9, 0.5 * gf);
-        this.noiseBurst(0.4, 0.2 * gf, 400);
-        break;
-      case 'victory':
-        this.arp([523, 659, 784, 1046], 0.12, 0.4 * gf);
-        break;
-      case 'bossshield':
-        this.sweep(1200 * pf, 220, 0.3, 0.4 * gf);
-        this.noiseBurst(0.1, 0.16 * gf, 3200);
-        break;
-      case 'bossteleport':
-        this.blip(620 * pf, 0.14, 'sine', 0.3 * gf, 320);
-        break;
-      case 'bossentry':
-        this.sweep(160, 320, 0.5, 0.45 * gf);
-        break;
-      case 'focusready':
-        // Prontidão do pulso (P5-02-03): bipe duplo ascendente, convidativo.
-        this.blip(660 * pf, 0.1, 'triangle', 0.32 * gf, 220);
-        break;
-      case 'achievement':
-        // Desbloqueio (P6-02-02): arpejo curto e brilhante, distinto da vitória.
-        this.arp([784, 988, 1318], 0.1, 0.34 * gf);
-        break;
-    }
+    this.theme.playCue(cue, backend, pf, gf);
 
     if (policy?.shouldDuck(cue)) this.duckMusic();
   }
 
-  // ---- Síntese -----------------------------------------------------------
-
-  /** Bipe simples com envelope; `glide` desloca a frequência ao longo do som. */
-  private blip(freq: number, dur: number, type: OscillatorType, gain: number, glide = 0): void {
-    const ctx = this.ctx!;
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t);
-    if (glide) osc.frequency.linearRampToValueAtTime(Math.max(40, freq + glide), t + dur);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(this.master!);
-    osc.start(t);
-    osc.stop(t + dur + 0.02);
-  }
-
-  /** Varredura de frequência (whoosh) de `from` a `to`. */
-  private sweep(from: number, to: number, dur: number, gain: number): void {
-    const ctx = this.ctx!;
-    const t = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(from, t);
-    osc.frequency.exponentialRampToValueAtTime(Math.max(40, to), t + dur);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    osc.connect(g).connect(this.master!);
-    osc.start(t);
-    osc.stop(t + dur + 0.02);
-  }
-
-  /** Arpejo curto (jingle de vitória). */
-  private arp(freqs: number[], step: number, gain: number): void {
-    freqs.forEach((f, i) => {
-      const ctx = this.ctx!;
-      const t = ctx.currentTime + i * step;
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(f, t);
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), t + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + step * 1.2);
-      osc.connect(g).connect(this.master!);
-      osc.start(t);
-      osc.stop(t + step * 1.3);
-    });
-  }
+  // ---- Recursos transversais ---------------------------------------------
 
   /**
-   * Camada de ruído filtrado (impacto/explosão) a partir do buffer pré-gerado.
-   * Um `AudioBufferSourceNode` novo por disparo (descartável; nunca reusar um
-   * source já tocado — iOS/Safari re-trigger).
+   * Empacota os recursos transversais entregues ao tema. Retorna `null` quando
+   * não há contexto (ambiente sem Web Audio / antes do gesto) — garante o no-op
+   * silencioso de toda operação que depende de áudio.
    */
-  private noiseBurst(dur: number, gain: number, filterHz: number): void {
-    const ctx = this.ctx!;
-    if (!this.noiseBuffer) return;
-    const t = ctx.currentTime;
-    const src = ctx.createBufferSource();
-    src.buffer = this.noiseBuffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.value = filterHz;
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(Math.max(0.0002, gain), t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(filter).connect(g).connect(this.master!);
-    src.start(t);
-    src.stop(t + dur + 0.02);
+  private backend(): AudioBackend | null {
+    if (!this.started || !this.ctx || !this.master || !this.musicGain) return null;
+    return {
+      ctx: this.ctx,
+      master: this.master,
+      musicGain: this.musicGain,
+      noiseBuffer: this.noiseBuffer,
+    };
   }
 
-  /** Abaixa a trilha por ~`durationMs` e recupera (P5-04-02). */
+  /** Abaixa a trilha por ~`durationMs` e recupera (P5-04-02). Transversal. */
   private duckMusic(): void {
     const ctx = this.ctx;
     const mg = this.musicGain;

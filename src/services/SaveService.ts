@@ -30,6 +30,10 @@ const PROFILE_BEST_KEY = 'hairline.profile.best.v1';
 const ACHIEVEMENTS_KEY = 'hairline.achievements.v1';
 /** Anel das últimas runs (P6-03-02): array, mais recente primeiro, podado em N. */
 const HISTORY_KEY = 'hairline.profile.history.v1';
+/** Esquema de controle de toque (P10-01). Ausente ⇒ default da config. */
+const CONTROL_SCHEME_KEY = 'hairline.controlScheme.v1';
+/** Tema de apresentação escolhido (P10-04). Ausente/inválido ⇒ default arcade. */
+const THEME_KEY = 'hairline.theme.v1';
 /** Teto fixo do histórico: perfil nunca cresce sem limite (P6-03-02). */
 const HISTORY_LIMIT = 20;
 
@@ -79,6 +83,42 @@ export class SaveService {
   /** Persiste a preferência de vibração. */
   setHapticsEnabled(value: boolean): void {
     this.store.setItem(HAPTICS_KEY, value ? '1' : '0');
+  }
+
+  // ---- Esquema de controle de toque (P10-01) ----------------------------
+
+  /**
+   * Esquema de controle escolhido pelo jogador, ou null se nunca alterado (⇒ o
+   * chamador usa o default de `controls.json`). Presentation-only: NUNCA entra
+   * na sim/replay/hash. Valor inválido no store ⇒ null (cai no default).
+   */
+  getControlScheme(): 'relative' | 'absolute' | null {
+    const raw = this.store.getItem(CONTROL_SCHEME_KEY);
+    return raw === 'relative' || raw === 'absolute' ? raw : null;
+  }
+
+  /** Persiste o esquema de controle de toque. */
+  setControlScheme(scheme: 'relative' | 'absolute'): void {
+    this.store.setItem(CONTROL_SCHEME_KEY, scheme);
+  }
+
+  // ---- Tema de apresentação (P10-04) ------------------------------------
+
+  /**
+   * Id do tema de apresentação escolhido, ou null se nunca alterado (⇒ o
+   * chamador resolve o default via `resolveTheme`). Persistência burra: a
+   * validação id→tema (default no desconhecido/corrompido) é do registro
+   * `config/themes`, não daqui — mesmo padrão da classe de nave.
+   * Presentation-only: NUNCA entra na sim/replay/hash.
+   */
+  getSelectedThemeId(): string | null {
+    const raw = this.store.getItem(THEME_KEY);
+    return raw && raw.length > 0 ? raw : null;
+  }
+
+  /** Persiste o tema de apresentação escolhido. */
+  setSelectedThemeId(id: string): void {
+    this.store.setItem(THEME_KEY, id);
   }
 
   // ---- Seleção de cosméticos / loadout (P6-01-01) -----------------------

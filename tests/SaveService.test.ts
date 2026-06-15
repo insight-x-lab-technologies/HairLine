@@ -64,6 +64,37 @@ describe('SaveService — persistência local (docs/02 §8)', () => {
     store.setItem('hairline.loadout.v1', '{nao é json');
     expect(new SaveService(store).getLoadoutSelection()).toEqual({});
   });
+
+  it('esquema de controle: ausente ⇒ null, escolha persiste (P10-01)', () => {
+    const store = fakeStore();
+    const s = new SaveService(store);
+    expect(s.getControlScheme()).toBeNull();
+    s.setControlScheme('absolute');
+    expect(new SaveService(store).getControlScheme()).toBe('absolute');
+    s.setControlScheme('relative');
+    expect(new SaveService(store).getControlScheme()).toBe('relative');
+  });
+
+  it('esquema de controle inválido no store ⇒ null (cai no default) (P10-01)', () => {
+    const store = fakeStore();
+    store.setItem('hairline.controlScheme.v1', 'diagonal');
+    expect(new SaveService(store).getControlScheme()).toBeNull();
+  });
+
+  it('tema de apresentação: ausente ⇒ null, escolha persiste (P10-04)', () => {
+    const store = fakeStore();
+    const s = new SaveService(store);
+    expect(s.getSelectedThemeId()).toBeNull();
+    s.setSelectedThemeId('arcade');
+    // nova instância sobre o mesmo store mantém a escolha
+    expect(new SaveService(store).getSelectedThemeId()).toBe('arcade');
+  });
+
+  it('tema vazio no store ⇒ null (a validade fica no registro) (P10-04)', () => {
+    const store = fakeStore();
+    store.setItem('hairline.theme.v1', '');
+    expect(new SaveService(store).getSelectedThemeId()).toBeNull();
+  });
 });
 
 describe('SaveService — perfil acumulado e histórico (P6-03)', () => {

@@ -5,6 +5,7 @@ import { neonText, pulse } from '../ui/neonText';
 import { getAudio } from '../services/AudioService';
 import { getSave } from '../services/SaveService';
 import { getHaptics } from '../services/HapticsService';
+import { getControlsConfig } from '../config/controls';
 import { dailySeed, dayKey } from '../services/DailySeed';
 import { getIdentity } from '../services/PlayerIdentity';
 import { pickWeeklyModifiers, combineMods, weeklySeed, weekKey } from '../systems/Modifiers';
@@ -13,6 +14,7 @@ import { stagePayload, stageRows } from '../ui/stageSelect';
 import { hudPadding } from '../ui/hudLayout';
 import { readSafeAreaInsets } from '../services/SafeArea';
 import { homeLayout, type HomeLayout } from '../ui/home';
+import { listThemes, resolveTheme } from '../config/themes';
 import { heroBackground } from '../ui/heroBackground';
 import { shareTargets, shareGame, openExternal } from '../ui/socialLinks';
 import {
@@ -200,14 +202,16 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 
-  /** Apelido editável (ranking diário) + toggle de vibração (onde houver API). */
+  /**
+   * Apelido editável (ranking diário) + toggle de controle de toque (P10-01) +
+   * seletor de tema de apresentação (P10-04) + toggle de vibração (onde houver API).
+   */
   private drawUtilities(cx: number, y: number): void {
     const me = getIdentity();
     const haptics = getHaptics(getSave());
-    const nameX = haptics.isSupported ? cx - 60 : cx;
-    const nameBtn = neonText(this, nameX, y, `nome: ${me.name}  ✎`, 18, '#5a6b7a').setInteractive({
-      useHandCursor: true,
-    });
+    const nameBtn = neonText(this, cx - 200, y, `nome: ${me.name}  ✎`, 18, '#5a6b7a').setInteractive(
+      { useHandCursor: true },
+    );
     nameBtn.on('pointerdown', () => {
       const novo = typeof window !== 'undefined' ? window.prompt('Seu apelido:', me.name) : null;
       if (novo !== null) {
@@ -216,9 +220,27 @@ export class MenuScene extends Phaser.Scene {
       }
     });
 
+    // Esquema de controle de toque: relativo (offset) × absoluto (segue o dedo).
+    const scheme = (): 'relative' | 'absolute' =>
+      getSave().getControlScheme() ?? getControlsConfig().scheme;
+    const ctrlLabel = (): string => `🎮 ${scheme() === 'relative' ? 'OFFSET' : 'DIRETO'}`;
+    const ctrlBtn = neonText(this, cx - 45, y, ctrlLabel(), 18, '#5a6b7a').setInteractive({
+      useHandCursor: true,
+    });
+    ctrlBtn.on('pointerdown', () => {
+      getSave().setControlScheme(scheme() === 'relative' ? 'absolute' : 'relative');
+      ctrlBtn.setText(ctrlLabel());
+    });
+
+    // Tema de apresentação (P10-04): abre o seletor; estado do jogador, fora da sim.
+    const themeBtn = neonText(this, cx + 95, y, '🎨 TEMA', 18, '#5a6b7a').setInteractive({
+      useHandCursor: true,
+    });
+    themeBtn.on('pointerdown', () => this.showThemes());
+
     if (haptics.isSupported) {
       const label = (): string => `📳 ${haptics.isEnabled ? 'ON' : 'OFF'}`;
-      const hapticBtn = neonText(this, cx + 150, y, label(), 18, '#5a6b7a').setInteractive({
+      const hapticBtn = neonText(this, cx + 210, y, label(), 18, '#5a6b7a').setInteractive({
         useHandCursor: true,
       });
       hapticBtn.on('pointerdown', () => {
@@ -226,6 +248,49 @@ export class MenuScene extends Phaser.Scene {
         hapticBtn.setText(label());
       });
     }
+  }
+
+  /**
+   * Seletor de TEMA de apresentação (P10-04): overlay listando os temas do
+   * registro com o atual marcado. Tocar persiste a escolha (`SaveService`), aplica
+   * o tema de áudio (vale já no menu/preview) e fecha — passa a valer na próxima
+   * run. É apresentação pura: nada aqui toca a simulação/replay/ranking.
+   */
+  private showThemes(): void {
+    const cx = VIRTUAL_WIDTH / 2;
+    const overlay = this.add.container(0, 0).setDepth(100);
+    const bg = this.add
+      .rectangle(cx, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 0x05060a, 0.97)
+      .setInteractive();
+    overlay.add(bg);
+    overlay.add(neonText(this, cx, 150, 'TEMA', 48, '#0bd3c6'));
+    overlay.add(neonText(this, cx, 200, 'estilo de apresentação (visual + áudio)', 18, '#5a6b7a'));
+
+    const current = resolveTheme(getSave().getSelectedThemeId()).id;
+    listThemes().forEach((t, i) => {
+      const y = 320 + i * 90;
+      const chosen = t.id === current;
+      const label = neonText(
+        this,
+        cx,
+        y,
+        `${chosen ? '▶' : '·'} ${t.label}`,
+        34,
+        chosen ? '#ffd166' : '#9af7ef',
+      ).setInteractive({ useHandCursor: true });
+      overlay.add(label);
+      label.on('pointerdown', () => {
+        getSave().setSelectedThemeId(t.id);
+        getAudio().useAudioTheme(t.audioThemeId);
+        overlay.destroy();
+      });
+    });
+
+    const back = neonText(this, cx, VIRTUAL_HEIGHT - 90, '‹ VOLTAR', 28, '#ff5d8f').setInteractive({
+      useHandCursor: true,
+    });
+    overlay.add(back);
+    back.on('pointerdown', () => overlay.destroy());
   }
 
   /**

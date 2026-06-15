@@ -9,5 +9,7 @@ ondas, inimigos, chefes e balanceamento moram aqui como JSON/JSONC e são
 - `enemies/` — stats de inimigos (Fase 1+).
 - `bosses/` — definição de chefes (Fase 1+).
 - `balance.jsonc` — números globais de balanceamento.
+- `controls.json` — esquema/sensibilidade do controle de toque (P10-01).
+  **Presentation-only:** lido por `config/controls.ts`, **nunca** por `src/sim`.
 
 Na Fase 0 estão vazios de propósito: ainda não há gameplay.
