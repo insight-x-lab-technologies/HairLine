@@ -2,7 +2,15 @@ import Phaser from 'phaser';
 import { VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '../config/layout';
 import type { Simulation } from '../sim/Simulation';
 import { Rng } from '../services/Rng';
-import { shapePoints } from '../ui/shapes';
+import { shapePoints, shipSilhouette, starPoints, type Pt } from '../ui/shapes';
+import {
+  createStarField,
+  createNebula,
+  advanceStarField,
+  advanceNebula,
+  type Star,
+  type NebulaBlob,
+} from './background';
 import { ParticlePool } from '../ui/ParticlePool';
 import { hitStopDurationFor } from '../ui/HitStop';
 import { getEffects } from '../content';
@@ -11,6 +19,11 @@ import type { FxEventType } from '../sim/FxEvents';
 import type { HudPadding } from '../ui/hudLayout';
 import type { GameRenderer, RenderContext, ThemeCosmetics } from './GameRenderer';
 import playerData from '../data/player.json';
+
+/** Achata `Pt[]` em `[x0, y0, x1, y1, …]` para o construtor de `polygon`. */
+function flatPoints(pts: readonly Pt[]): number[] {
+  return pts.flatMap((p) => [p.x, p.y]);
+}
 
 /**
  * VectorTheme — tema de render NEON VETORIAL (P10-02): a primeira implementação
@@ -26,8 +39,9 @@ export class VectorTheme implements GameRenderer {
   private ship!: Phaser.GameObjects.Container;
   private engine!: Phaser.GameObjects.Triangle;
   private bgGfx!: Phaser.GameObjects.Graphics;
-  /** Campo de estrelas (parallax) — x, y, profundidade z (0..1). */
-  private readonly stars: { x: number; y: number; z: number }[] = [];
+  /** Campo de estrelas multicamada (parallax) e nebulosa — P10-07. */
+  private stars: Star[] = [];
+  private nebula: NebulaBlob[] = [];
   /** Rng decorativo do fundo (não afeta o jogo; só evita Math.random). */
   private starRng!: Rng;
   private shotsGfx!: Phaser.GameObjects.Graphics;
@@ -193,21 +207,31 @@ export class VectorTheme implements GameRenderer {
     // Anel de graze ao redor da nave (P5-02-02): zona de risco legível.
     this.drawGrazeRing(sim, player.x, player.y, shipAlpha, ctx.focus);
 
-    // Inimigos: forma por tipo + glow, girando suavemente.
+    // Inimigos: forma por tipo + glow, girando suavemente, com acento interno
+    // contra-rotativo e núcleo claro (P10-06: mais caráter, mesma leitura).
     this.enemyGfx.clear();
+    const g = this.enemyGfx;
     sim.enemies.forEachActive((e) => {
       const color = Phaser.Display.Color.HexStringToColor(e.color).color;
+      const light = this.lightenColor(color, 80);
       const rot = e.ageTicks * 0.03;
+      g.fillStyle(color, 0.18).fillCircle(e.x, e.y, e.radius * 1.5); // glow
+      g.fillStyle(color, 0.9).lineStyle(2, 0xffffff, 0.85);
       const pts = shapePoints(e.shape, e.x, e.y, e.radius, rot);
-      this.enemyGfx.fillStyle(color, 0.18).fillCircle(e.x, e.y, e.radius * 1.5); // glow
-      this.enemyGfx.fillStyle(color, 0.9).lineStyle(2, 0xffffff, 0.85);
       if (pts.length === 0) {
-        this.enemyGfx.fillCircle(e.x, e.y, e.radius).strokeCircle(e.x, e.y, e.radius);
+        g.fillCircle(e.x, e.y, e.radius).strokeCircle(e.x, e.y, e.radius);
       } else {
         // pts é {x,y}[]; o runtime aceita, mas o tipo pede Vector2[].
         const poly = pts as unknown as Phaser.Math.Vector2[];
-        this.enemyGfx.fillPoints(poly, true).strokePoints(poly, true);
+        g.fillPoints(poly, true).strokePoints(poly, true);
       }
+      // Acento interno contra-rotativo (quando há forma) + núcleo claro.
+      const inner = shapePoints(e.shape, e.x, e.y, e.radius * 0.5, -rot * 1.5);
+      if (inner.length > 0) {
+        const ip = inner as unknown as Phaser.Math.Vector2[];
+        g.lineStyle(1.5, light, 0.8).strokePoints(ip, true);
+      }
+      g.fillStyle(light, 0.95).fillCircle(e.x, e.y, e.radius * 0.28);
     });
 
     this.drawBoss(sim);
@@ -341,13 +365,13 @@ export class VectorTheme implements GameRenderer {
         .strokeCircle(sys.teleportDestX, sys.teleportDestY, 6);
     }
 
-    // Corpo: cor muda na fase 2 (feedback do "fica mais perigoso").
-    const color = boss.phaseIndex === 0 ? 0xff5d8f : 0xff2d55;
-    this.bossGfx
-      .fillStyle(color, 0.2)
-      .lineStyle(3, color, 1)
-      .fillCircle(boss.x, boss.y, boss.radius)
-      .strokeCircle(boss.x, boss.y, boss.radius);
+    // Corpo: identidade derivada de `shape`/`color` do JSON (P10-06), não mais
+    // `fillCircle` puro. A cor clareia por fase ⇒ "fica mais perigoso" continua
+    // óbvio. `color` é reusado pela barra de vida abaixo.
+    const baseColor = sys ? this.colorOf(sys.color) : 0xff5d8f;
+    const shape = sys ? sys.shape : 'circle';
+    const color = this.lightenColor(baseColor, boss.phaseIndex * 38);
+    this.drawBossBody(this.bossGfx, boss.x, boss.y, boss.radius, shape, color, boss.phaseIndex, sim.tickCount);
 
     // Núcleo invulnerável enquanto há partes vivas (P4-02b-04): aro tracejado.
     if (sys && !sys.coreVulnerable) {
@@ -387,6 +411,47 @@ export class VectorTheme implements GameRenderer {
       .fillRect(barX, barY, barW * frac, 10);
   }
 
+  /**
+   * Corpo do chefe (P10-06): casco com identidade derivada de `shape` + glow
+   * que segue a forma + núcleo estelar contra-rotativo + olho pulsante, em vez
+   * de `fillCircle` puro. Gerativo (qualquer `shape`/cor do JSON ganha visual;
+   * 'circle'/desconhecido cai no disco com núcleo, sem quebrar). Preenchimento
+   * CONTIDO para não encobrir as balas (legibilidade > beleza). A leitura das
+   * mecânicas (escudo/partes/teleporte/núcleo invulnerável) é desenhada à parte.
+   */
+  private drawBossBody(
+    g: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    radius: number,
+    shape: string,
+    color: number,
+    phaseIndex: number,
+    tick: number,
+  ): void {
+    const rot = tick * 0.008;
+    const light = this.lightenColor(color, 90);
+    // Casco + glow seguindo a forma (fallback círculo).
+    const hull = shapePoints(shape, x, y, radius, rot);
+    if (hull.length === 0) {
+      g.fillStyle(color, 0.16).fillCircle(x, y, radius * 1.18);
+      g.fillStyle(color, 0.2).lineStyle(3, light, 1).fillCircle(x, y, radius).strokeCircle(x, y, radius);
+    } else {
+      const glow = shapePoints(shape, x, y, radius * 1.18, rot) as unknown as Phaser.Math.Vector2[];
+      g.fillStyle(color, 0.16).fillPoints(glow, true);
+      const poly = hull as unknown as Phaser.Math.Vector2[];
+      g.fillStyle(color, 0.2).lineStyle(3, light, 1).fillPoints(poly, true).strokePoints(poly, true);
+    }
+    // Núcleo estelar contra-rotativo: dá "cara de máquina"; pontas crescem com a
+    // fase (identidade evolui junto com a cor, sem anéis que confundam o escudo).
+    const core = starPoints(x, y, radius * 0.6, radius * 0.3, phaseIndex + 4, -rot * 1.7);
+    const cp = core as unknown as Phaser.Math.Vector2[];
+    g.fillStyle(color, 0.28).lineStyle(2, light, 0.85).fillPoints(cp, true).strokePoints(cp, true);
+    // Olho central pulsante.
+    const pulse = 0.6 + 0.4 * Math.sin(tick * 0.12);
+    g.fillStyle(light, 0.9).fillCircle(x, y, radius * 0.1 + radius * 0.1 * pulse);
+  }
+
   /** Desenha o anel expansivo do pulso refletor logo após a ativação. */
   private drawReflectFx(sim: Simulation): void {
     this.fxGfx.clear();
@@ -403,19 +468,17 @@ export class VectorTheme implements GameRenderer {
 
   private drawField(): void {
     const scene = this.scene;
-    // Fundo: leve gradiente vinheta + campo de estrelas (parallax).
+    // Fundo procedural (P10-07): cor base + nebulosa + estrelas multicamada,
+    // tudo dirigido por `effects.background`. Decorativo: `Rng` semeado pelo
+    // relógio (sem Math.random) — não entra em `hashState`.
+    const bg = this.effects.background;
     scene.add
-      .rectangle(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, 0x070912)
+      .rectangle(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH, VIRTUAL_HEIGHT, this.colorOf(bg.baseColor))
       .setDepth(-10);
     this.bgGfx = scene.add.graphics().setDepth(-9);
     this.starRng = new Rng((Date.now() >>> 0) ^ 0x51a5);
-    for (let i = 0; i < 90; i++) {
-      this.stars.push({
-        x: this.starRng.range(0, VIRTUAL_WIDTH),
-        y: this.starRng.range(0, VIRTUAL_HEIGHT),
-        z: 0.3 + this.starRng.next() * 0.7,
-      });
-    }
+    this.stars = createStarField(bg, this.starRng);
+    this.nebula = createNebula(bg, this.starRng);
     // Moldura sutil do campo jogável.
     scene.add
       .rectangle(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT / 2, VIRTUAL_WIDTH - 4, VIRTUAL_HEIGHT - 4)
@@ -423,45 +486,60 @@ export class VectorTheme implements GameRenderer {
       .setDepth(-8);
   }
 
-  /** Estrelas descem com velocidade proporcional à profundidade (parallax). */
+  /**
+   * Avança e desenha o fundo (P10-07): nebulosa derivando devagar (anéis
+   * concêntricos baratos — sem blur) sob estrelas multicamada que descem ∝
+   * velocidade da camada (parallax). Sem alocação por frame (arrays reciclados).
+   */
   updateBackground(deltaMs: number): void {
     const g = this.bgGfx;
     g.clear();
     const dt = deltaMs / 1000;
+    const bg = this.effects.background;
+    // Nebulosa primeiro (camada mais ao fundo). Glow suave = 3 discos concêntricos.
+    advanceNebula(this.nebula, bg.nebula.driftY, dt, this.starRng);
+    for (const b of this.nebula) {
+      g.fillStyle(b.color, b.alpha * 0.5).fillCircle(b.x, b.y, b.radius);
+      g.fillStyle(b.color, b.alpha * 0.7).fillCircle(b.x, b.y, b.radius * 0.62);
+      g.fillStyle(b.color, b.alpha).fillCircle(b.x, b.y, b.radius * 0.3);
+    }
+    // Estrelas por cima, cada uma com cor/tamanho/alpha da sua camada.
+    advanceStarField(this.stars, dt, this.starRng);
     for (const s of this.stars) {
-      s.y += (40 + s.z * 160) * dt;
-      if (s.y > VIRTUAL_HEIGHT) {
-        s.y = 0;
-        s.x = this.starRng.range(0, VIRTUAL_WIDTH);
-      }
-      g.fillStyle(0x39f5e8, 0.15 + s.z * 0.5);
-      g.fillCircle(s.x, s.y, s.z * 2);
+      g.fillStyle(s.color, s.alpha).fillCircle(s.x, s.y, s.size);
     }
   }
 
   private makeShip(): Phaser.GameObjects.Container {
     const scene = this.scene;
-    // Forma/cor vêm do cosmético resolvido (P6-01-02); tamanho é constante
-    // entre naves — HITBOX ≠ SPRITE (§3.5): nave maior NÃO é hitbox maior.
+    // Cor vem do cosmético resolvido (P6-01-02); tamanho é constante entre
+    // naves — HITBOX ≠ SPRITE (§3.5): nave maior NÃO é hitbox maior.
+    // P10-05: a nave é uma SILHUETA COESA (`shipSilhouette`), não 5 primitivos
+    // soltos. A forma do cosmético vira ACENTO de cockpit (mantém a identidade
+    // do loadout), coerente com o preview do Hangar.
     const fill = this.shipColor;
     const stroke = this.lightenColor(this.shipColor, 90);
-    // Chama do motor (atrás), pulsa no update.
-    this.engine = scene.add.triangle(0, 18, -8, 0, 8, 0, 0, 26, 0xffd166).setAlpha(0.9);
-    const glow = scene.add.circle(0, 0, 34, this.shipColor, 0.12);
-    // Corpo: forma do cosmético (preenchimento + contorno neon claro).
-    const pts = shapePoints(this.shipShape, 0, 0, 30);
-    const flat = pts.length > 0 ? pts.flatMap((p) => [p.x, p.y]) : [0, -30, 20, 22, 0, 12, -20, 22];
-    const body = scene.add.polygon(0, 0, flat, fill, 1).setStrokeStyle(3, stroke);
-    const wing = scene.add
-      .polygon(0, 0, [0, -8, 26, 26, -26, 26], this.lightenColor(this.shipColor, -60), 0.5)
-      .setStrokeStyle(1, stroke);
+    // Chama do motor (atrás), sai pelo entalhe traseiro; pulsa no update.
+    this.engine = scene.add.triangle(0, 20, -7, 0, 7, 0, 0, 24, 0xffd166).setAlpha(0.9);
+    // Glow integrado: segue a silhueta (não um círculo solto) — leitura coesa.
+    const glow = scene.add.polygon(0, 0, flatPoints(shipSilhouette(0, 0, 34)), this.shipColor, 0.12);
+    // Corpo: silhueta única do caça (preenchimento + contorno neon claro).
+    const body = scene.add
+      .polygon(0, 0, flatPoints(shipSilhouette(0, 0, 30)), fill, 1)
+      .setStrokeStyle(3, stroke);
+    // Acento de cockpit = forma do cosmético, próximo ao nariz; some no 'circle'.
+    const acc = shapePoints(this.shipShape, 0, 0, 7);
+    const accentFlat = acc.length > 0 ? flatPoints(acc) : [0, -8, 6, 4, 0, 1, -6, 4];
+    const accent = scene.add
+      .polygon(0, -7, accentFlat, this.lightenColor(this.shipColor, 70), 0.95)
+      .setStrokeStyle(1.5, 0xffffff, 0.8);
     // Ponto central = HITBOX lógica, muito menor que o sprite (§3.5).
     const hitbox = scene.add.circle(0, 0, 4, 0xff4d6d).setStrokeStyle(2, 0xffffff);
     return scene.add.container(VIRTUAL_WIDTH / 2, VIRTUAL_HEIGHT * 0.78, [
       glow,
       this.engine,
-      wing,
       body,
+      accent,
       hitbox,
     ]);
   }

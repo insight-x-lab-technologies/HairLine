@@ -176,6 +176,17 @@ export class BossSystem {
     return this.def.defeatScore;
   }
 
+  // ---- Identidade visual (só apresentação — P10-06) ----
+
+  /** Forma do corpo derivada do JSON (fallback 'circle'). Render-only. */
+  get shape(): string {
+    return this.def.shape ?? 'circle';
+  }
+  /** Cor-base do corpo derivada do JSON (fallback rosa). Render-only. */
+  get color(): string {
+    return this.def.color ?? '#ff5d8f';
+  }
+
   // ---- Escudo (acessado por CollisionSystem e render) ----
 
   get shieldActive(): boolean {

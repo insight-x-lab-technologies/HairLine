@@ -243,6 +243,28 @@ export function validateEffects(cfg: EffectsConfig): void {
     if (sum > cfg.haptics.maxPatternMs)
       throw new Error(`effects.haptics.patterns.${cue}: soma > maxPatternMs`);
   }
+  // P10-07: fundo de espaço procedural (camadas de estrelas + nebulosa).
+  const bg = cfg.background;
+  if (!Array.isArray(bg.starLayers) || bg.starLayers.length < 1)
+    throw new Error('effects.background: precisa de ao menos 1 camada de estrelas');
+  bg.starLayers.forEach((layer, i) => {
+    assertFiniteNonNeg(layer.count, `effects.background.starLayers[${i}].count`);
+    assertFiniteNonNeg(layer.speed, `effects.background.starLayers[${i}].speed`);
+    assertFiniteNonNeg(layer.size, `effects.background.starLayers[${i}].size`);
+    if (typeof layer.alpha !== 'number' || layer.alpha < 0 || layer.alpha > 1)
+      throw new Error(`effects.background.starLayers[${i}].alpha fora de [0,1]`);
+  });
+  const neb = bg.nebula;
+  assertFiniteNonNeg(neb.count, 'effects.background.nebula.count');
+  assertFiniteNonNeg(neb.driftY, 'effects.background.nebula.driftY');
+  assertFiniteNonNeg(neb.radiusMin, 'effects.background.nebula.radiusMin');
+  assertFiniteNonNeg(neb.radiusMax, 'effects.background.nebula.radiusMax');
+  if (neb.radiusMax < neb.radiusMin)
+    throw new Error('effects.background.nebula: radiusMax < radiusMin');
+  if (typeof neb.alpha !== 'number' || neb.alpha < 0 || neb.alpha > 1)
+    throw new Error('effects.background.nebula.alpha fora de [0,1]');
+  if (neb.count > 0 && neb.colors.length === 0)
+    throw new Error('effects.background.nebula: count > 0 exige ao menos 1 cor');
 }
 
 /**
@@ -267,6 +289,18 @@ export function validateAudioConfig(cfg: AudioConfig): void {
   if (s.gainVar < 0 || s.gainVar > 1) throw new Error('audio.sfx.gainVar fora de faixa');
   if (s.duck.amount < 0 || s.duck.amount > 1)
     throw new Error('audio.sfx.duck.amount fora de [0,1]');
+  // P10-08: knobs de síntese do tema "Arcade". Frequências > 0; detune >= 0.
+  const sy = cfg.synth;
+  assertFiniteNonNeg(sy.padDetuneCents, 'audio.synth.padDetuneCents');
+  for (const k of [
+    'impactNoiseHz',
+    'killSubHz',
+    'hitSubHz',
+    'pulseShimmerHz',
+    'rhythmCutoffHz',
+  ] as const) {
+    if (!(sy[k] > 0)) throw new Error(`audio.synth.${k} deve ser > 0`);
+  }
 }
 
 // Validação de integridade no carregamento (falha cedo em dados quebrados).

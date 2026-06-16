@@ -195,6 +195,45 @@ export interface ParticleFx {
   /** Micro-shake opcional disparado junto (ex.: kill de chefe). */
   readonly shake?: ShakeFx;
 }
+/**
+ * Camada de estrelas do fundo procedural (P10-07). Cada camada é uma
+ * profundidade: estrelas distantes (lentas/pequenas/fracas) → próximas
+ * (rápidas/maiores/brilhantes), produzindo parallax. Apresentação pura.
+ */
+export interface BackgroundStarLayer {
+  /** Quantidade de estrelas nesta camada. */
+  readonly count: number;
+  /** Velocidade de descida (px/s) — maior = mais "próxima". */
+  readonly speed: number;
+  /** Raio em px. */
+  readonly size: number;
+  /** Cor neon em hex (ex.: "#39f5e8"). */
+  readonly color: string;
+  /** Opacidade base [0,1] — fundo é fundo (baixo contraste). */
+  readonly alpha: number;
+}
+/** Nebulosa procedural (P10-07): blobs suaves derivando devagar ao fundo. */
+export interface BackgroundNebula {
+  /** Número de blobs (0 ⇒ sem nebulosa). */
+  readonly count: number;
+  /** Descida (px/s) — bem lenta, para não competir com a leitura. */
+  readonly driftY: number;
+  readonly radiusMin: number;
+  readonly radiusMax: number;
+  /** Opacidade [0,1] — propositalmente baixíssima (legibilidade das balas). */
+  readonly alpha: number;
+  /** Paleta de cores hex (vazia ⇒ sem nebulosa). */
+  readonly colors: readonly string[];
+}
+/**
+ * Fundo de espaço procedural (P10-07): cor base + camadas de estrelas (parallax)
+ * + nebulosa. Presentation-only (lido só pelo `VectorTheme`, nunca pela sim).
+ */
+export interface BackgroundConfig {
+  readonly baseColor: string;
+  readonly starLayers: readonly BackgroundStarLayer[];
+  readonly nebula: BackgroundNebula;
+}
 export interface EffectsConfig {
   readonly shake: Readonly<Record<string, ShakeFx>>;
   readonly flash: Readonly<Record<string, FlashFx>>;
@@ -230,6 +269,8 @@ export interface EffectsConfig {
     readonly maxPatternMs: number;
     readonly patterns: Readonly<Record<string, readonly number[]>>;
   };
+  /** Fundo de espaço procedural (P10-07). */
+  readonly background: BackgroundConfig;
 }
 
 /**
@@ -258,6 +299,25 @@ export interface AudioConfig {
     readonly gainVar: number;
     readonly duck: { readonly amount: number; readonly durationMs: number };
     readonly duckCues: readonly string[];
+  };
+  /**
+   * Knobs de SÍNTESE do tema "Arcade" (P10-08): tuning de timbre dos SFX de
+   * impacto e da trilha, fora de constantes mágicas. Só o `SynthAudioTheme` lê;
+   * o tema por samples (P10-12) ignora. Apresentação pura — fora da simulação.
+   */
+  readonly synth: {
+    /** Filtro lowpass inicial da cauda de ruído dos impactos (Hz). */
+    readonly impactNoiseHz: number;
+    /** Pitch inicial do "boom" grave da explosão/kill (Hz; cai durante o som). */
+    readonly killSubHz: number;
+    /** Pitch inicial do thump do hit do jogador (Hz). */
+    readonly hitSubHz: number;
+    /** Alvo do shimmer/ruído do pulso refletor (Hz). */
+    readonly pulseShimmerHz: number;
+    /** Espalhamento (cents) das vozes do pad da trilha — largura/calor. */
+    readonly padDetuneCents: number;
+    /** Lowpass do bus rítmico (Hz) — tira a aspereza "Atari" do osc pulsado. */
+    readonly rhythmCutoffHz: number;
   };
 }
 

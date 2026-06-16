@@ -36,6 +36,10 @@ Campos: `hp`, `radiusPx`, `speedYPxPerSec`, `patternId`, `shape`
 (triangle/diamond/hex/circle), `color` (#hex). Atuais: drone, sniper, turret,
 weaver, bomber, lancer, orbiter (**7**). Idade (`ageTicks`) controla a emissão.
 
+No tema **Arcade** (P10-06) o inimigo é o casco da `shape` + glow, com um
+**acento interno contra-rotativo** e um **núcleo claro** — mais caráter sem
+perder a leitura por tipo/cor. Render-only, gerativo a partir dos dados.
+
 ## Padrões de bala (emitters declarativos) — `src/data/patterns/*.json`
 
 Um padrão = lista de **emitters**. Campos por emitter:
@@ -76,6 +80,17 @@ fase recomeça). Validação no registro (`src/content/index.ts`, `validateBossD
 
 Atuais: warden (escudo), spinner (teleporte), gunner (adds), vortex (partes) e
 **colossus** — clímax de 3 fases (partes → escudo+adds → teleporte) (**5**).
+
+**Corpo vetorial com identidade (P10-06).** No tema Arcade o chefe deixou de ser
+`fillCircle` puro: o corpo é o **casco da `shape`** do JSON (fallback círculo) com
+glow que segue a forma, um **núcleo estelar contra-rotativo** (`starPoints`, dá
+"cara de máquina") e um **olho pulsante**. A **cor** vem do `color` do JSON e
+**clareia por fase** (`phaseIndex`) — "fica mais perigoso" continua óbvio — e as
+pontas do núcleo crescem com a fase. O preenchimento é **contido** (não encobre as
+balas) e os elementos de leitura das mecânicas (barra de vida, telegraph de
+teleporte, aro de núcleo invulnerável, pods de partes, anel de escudo) seguem
+desenhados à parte, inalterados. Render-only, gerativo (chefe novo no JSON ganha
+visual sem código): `BossSystem` expõe `shape`/`color` só para apresentação.
 
 ## Dificuldade (Endless) — `src/data/difficulty.json`
 
@@ -157,7 +172,25 @@ Tuning de feel em `src/data/effects.json` (P5-01-01) e `src/data/audio.json`
   (`MusicDirector`: base→rítmica→tensão→perigo), SFX em camadas (ruído +
   variação de pitch/ganho + polifonia/ducking via `SfxPolicy`), **haptics** no
   celular por evento (toggle persistido; `graze`/`kill` não vibram).
-- Fundo: campo de estrelas parallax.
+- **Síntese "Arcade" intencional (P10-08):** o `SynthAudioTheme` continua 100%
+  procedural (sem assets — TD-09), mas com timbres mais encorpados: SFX de
+  impacto em camadas (transiente + **corpo grave caindo** + cauda de ruído com
+  lowpass descendente) — explosão/kill, hit, pulso e entrada de chefe ganham
+  peso; a trilha tem pad **mais largo/quente** (vozes destoadas + lowpass),
+  rítmica filtrada (menos aspereza), tensão com **vibrato** e perigo com quinta
+  de shimmer. Tuning de timbre vem de `audio.json` → `synth` (sem constantes
+  mágicas). A *decisão* de som (`AudioCues`/`MusicDirector`/`SfxPolicy`) e a
+  interface `play(cue)` não mudam; presets de trilha (cosmético `music`) e o
+  preview do Hangar seguem válidos. Identidade sonora própria do **menu** fica
+  para adoção futura (API já existe; fora do escopo desta issue).
+- **Fundo de espaço procedural (P10-07):** parallax **multicamada** — camadas de
+  estrelas em profundidades distintas (distantes lentas/pequenas/fracas →
+  próximas rápidas/maiores/brilhantes) sobre uma **nebulosa** procedural (blobs
+  suaves derivando devagar). Tudo render-side, dirigido por dados
+  (`effects.json` → `background`: cor base, `starLayers`, `nebula`), com `Rng`
+  **decorativo** (sem `Math.random`, sem afetar a sim) e reciclagem das
+  estrelas/blobs ao sair da tela (sem `new` por frame). Contraste propositalmente
+  baixo: **fundo é fundo** — nunca disputa com balas/anel de graze.
 
 ## Cosméticos — `src/data/cosmetics.json` (P6-01)
 
@@ -203,6 +236,21 @@ um overlay lista os temas do registro com o atual marcado; tocar persiste, aplic
 o áudio na hora (vale já no menu) e passa a valer no visual na próxima run. O
 `PreloadScene` carrega **só** os assets do tema ativo (o vetorial não tem
 nenhum — não pesa o bundle de quem joga "Arcade"). Ver TD-30.
+
+### Nave vetorial coesa (P10-05, Bloco B)
+
+No tema **Arcade**, a nave é uma **silhueta única** — um caça com nariz, ombros,
+asas em flecha e dois pods de motor com entalhe central por onde sai a chama —
+não mais 5 primitivos soltos. A geometria é pura e testável
+(`shipSilhouette` em `src/ui/shapes.ts`, inscrita no raio, simétrica), usada
+**igual** no jogo (`VectorTheme.makeShip`) e no **preview do Hangar**
+(`HangarScene.drawShip`) ⇒ a nave em jogo = a nave do preview. O **glow** segue
+a silhueta (integrado, não um círculo solto). O cosmético (P6-01) continua
+aplicado: a **cor** tinge todo o casco e a **forma** vira um **acento de
+cockpit** perto do nariz (mantém a identidade do loadout). Princípios intactos:
+**hitbox ≠ sprite** (o ponto central vermelho continua pequeno e nítido),
+**tamanho visual estável entre naves**, anel de graze por baixo, chama pulsante,
+piscar em i-frames e encolher (0.7) no Foco. Render-only — nada toca a sim.
 
 ## Classes de nave — `src/data/ships.json` (P6-04)
 

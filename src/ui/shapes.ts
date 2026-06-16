@@ -39,6 +39,63 @@ export function arrowPoints(cx: number, cy: number, radius: number, rotation = 0
   return base.map((p) => ({ x: cx + p.x * cos - p.y * sin, y: cy + p.x * sin + p.y * cos }));
 }
 
+/**
+ * Vértices de uma SILHUETA de nave coesa (P10-05): um caça com nariz, ombros,
+ * asas em flecha e dois pods de motor com um entalhe central por onde sai a
+ * chama. É um único contorno fechado — lê como nave, não como peças soltas.
+ * Inscrita em `radius` (todos os vértices têm |v| ≤ radius), apontando para
+ * cima; pura/testável (sem Phaser). Usada igual no jogo (`VectorTheme`) e no
+ * preview do Hangar para garantir coerência. A forma/cor do cosmético entram
+ * como acento (cockpit) e tingimento, não trocando a silhueta.
+ */
+export function shipSilhouette(cx: number, cy: number, radius: number, rotation = 0): Pt[] {
+  const base: Pt[] = [
+    { x: 0, y: -1.0 }, // nariz
+    { x: 0.16, y: -0.42 }, // pescoço dir.
+    { x: 0.26, y: 0.02 }, // ombro dir.
+    { x: 0.9, y: 0.38 }, // ponta da asa dir. (em flecha)
+    { x: 0.4, y: 0.5 }, // bordo de fuga dir.
+    { x: 0.3, y: 0.86 }, // pod de motor dir.
+    { x: 0, y: 0.58 }, // entalhe traseiro (saída da chama)
+    { x: -0.3, y: 0.86 }, // pod de motor esq.
+    { x: -0.4, y: 0.5 }, // bordo de fuga esq.
+    { x: -0.9, y: 0.38 }, // ponta da asa esq.
+    { x: -0.26, y: 0.02 }, // ombro esq.
+    { x: -0.16, y: -0.42 }, // pescoço esq.
+  ];
+  const cos = Math.cos(rotation);
+  const sin = Math.sin(rotation);
+  return base.map((p) => {
+    const x = p.x * radius;
+    const y = p.y * radius;
+    return { x: cx + x * cos - y * sin, y: cy + x * sin + y * cos };
+  });
+}
+
+/**
+ * Vértices de uma ESTRELA de `points` pontas, alternando `outerRadius` e
+ * `innerRadius` (2·points vértices). Usada como núcleo/identidade dos chefes
+ * (P10-06) — um corpo com "cara de máquina" em vez de `fillCircle` puro. Pura
+ * e testável; o render desenha com `Graphics`.
+ */
+export function starPoints(
+  cx: number,
+  cy: number,
+  outerRadius: number,
+  innerRadius: number,
+  points: number,
+  rotation = 0,
+): Pt[] {
+  const pts: Pt[] = [];
+  const step = Math.PI / points; // meia-volta entre ponta e vale
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerRadius : innerRadius;
+    const a = rotation + i * step - Math.PI / 2;
+    pts.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+  }
+  return pts;
+}
+
 /** Mapeia um nome de forma para seus vértices. 'circle'/desconhecido → []. */
 export function shapePoints(
   shape: string,

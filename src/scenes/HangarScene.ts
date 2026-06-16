@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { SceneKeys } from '../config/sceneKeys';
 import { VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '../config/layout';
 import { neonText } from '../ui/neonText';
-import { shapePoints } from '../ui/shapes';
+import { shapePoints, shipSilhouette } from '../ui/shapes';
 import { getSave } from '../services/SaveService';
 import { getAudio } from '../services/AudioService';
 import { getCosmetics, getAchievementDefs } from '../content';
@@ -183,7 +183,11 @@ export class HangarScene extends Phaser.Scene {
     }
   }
 
-  /** Desenha uma nave (forma + cor) com glow e contorno claro, igual ao jogo. */
+  /**
+   * Desenha uma nave igual ao jogo (P10-05): SILHUETA COESA (`shipSilhouette`)
+   * com glow integrado e contorno neon claro, mais o ACENTO de cockpit na forma
+   * do cosmético. Mesma geometria/proporções do `VectorTheme` ⇒ preview honesto.
+   */
   private drawShip(
     g: Phaser.GameObjects.Graphics,
     shape: string,
@@ -193,14 +197,24 @@ export class HangarScene extends Phaser.Scene {
     radius: number,
   ): void {
     const stroke = lighten(color, 90);
-    g.fillStyle(color, 0.15).fillCircle(cx, cy, radius * 1.15);
-    const pts = shapePoints(shape, cx, cy, radius);
-    if (pts.length === 0) {
-      g.fillStyle(color, 1).lineStyle(3, stroke, 1).fillCircle(cx, cy, radius).strokeCircle(cx, cy, radius);
+    // Glow integrado: segue a silhueta (não um círculo solto).
+    const glow = shipSilhouette(cx, cy, radius * 1.13) as unknown as Phaser.Math.Vector2[];
+    g.fillStyle(color, 0.15).fillPoints(glow, true);
+    // Corpo: silhueta única do caça.
+    const hull = shipSilhouette(cx, cy, radius) as unknown as Phaser.Math.Vector2[];
+    g.fillStyle(color, 1).lineStyle(3, stroke, 1).fillPoints(hull, true).strokePoints(hull, true);
+    // Acento de cockpit = forma do cosmético, próximo ao nariz.
+    const accCy = cy - radius * 0.23;
+    const acc = shapePoints(shape, cx, accCy, radius * 0.23);
+    if (acc.length === 0) {
+      g.fillStyle(lighten(color, 70), 0.95).fillCircle(cx, accCy, radius * 0.16);
       return;
     }
-    const poly = pts as unknown as Phaser.Math.Vector2[];
-    g.fillStyle(color, 1).lineStyle(3, stroke, 1).fillPoints(poly, true).strokePoints(poly, true);
+    const accPoly = acc as unknown as Phaser.Math.Vector2[];
+    g.fillStyle(lighten(color, 70), 0.95)
+      .lineStyle(1.5, 0xffffff, 0.85)
+      .fillPoints(accPoly, true)
+      .strokePoints(accPoly, true);
   }
 }
 

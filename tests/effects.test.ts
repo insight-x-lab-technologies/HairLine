@@ -42,6 +42,26 @@ describe('effects.json — integridade dos dados de juice (P5-01-01)', () => {
     expect(() => validateEffects(bad)).toThrow();
   });
 
+  it('background: rejeita alpha fora de faixa, sem camadas e raio invertido (P10-07)', () => {
+    const base = getEffects();
+    const withBg = (over: Partial<EffectsConfig['background']>): EffectsConfig => ({
+      ...base,
+      background: { ...base.background, ...over },
+    });
+    expect(() => validateEffects(withBg({ starLayers: [] }))).toThrow();
+    expect(() =>
+      validateEffects(
+        withBg({ starLayers: [{ count: 1, speed: 1, size: 1, color: '#fff', alpha: 1.5 }] }),
+      ),
+    ).toThrow();
+    expect(() =>
+      validateEffects(withBg({ nebula: { ...base.background.nebula, radiusMax: 1, radiusMin: 9 } })),
+    ).toThrow();
+    expect(() =>
+      validateEffects(withBg({ nebula: { ...base.background.nebula, count: 2, colors: [] } })),
+    ).toThrow();
+  });
+
   it('haptics: padrões não vazios, positivos e dentro do teto', () => {
     const base = getEffects();
     const withPatterns = (patterns: Record<string, number[]>): EffectsConfig => ({
@@ -68,5 +88,31 @@ describe('audio.json — integridade dos dados de áudio (P5-04)', () => {
     expect(() => validateAudioConfig(badLayers)).toThrow();
     const badVoices: AudioConfig = { ...base, sfx: { ...base.sfx, maxVoices: 0 } };
     expect(() => validateAudioConfig(badVoices)).toThrow();
+  });
+
+  it('synth: knobs de síntese presentes e em faixa válida (P10-08)', () => {
+    const sy = getAudioConfig().synth;
+    // Frequências de síntese são positivas (Hz); spread do pad é não-negativo.
+    for (const k of [
+      'impactNoiseHz',
+      'killSubHz',
+      'hitSubHz',
+      'pulseShimmerHz',
+      'rhythmCutoffHz',
+    ] as const) {
+      expect(sy[k]).toBeGreaterThan(0);
+    }
+    expect(sy.padDetuneCents).toBeGreaterThanOrEqual(0);
+  });
+
+  it('synth: rejeita Hz não-positivo e detune negativo (P10-08)', () => {
+    const base = getAudioConfig();
+    const withSynth = (over: Partial<AudioConfig['synth']>): AudioConfig => ({
+      ...base,
+      synth: { ...base.synth, ...over },
+    });
+    expect(() => validateAudioConfig(withSynth({ killSubHz: 0 }))).toThrow();
+    expect(() => validateAudioConfig(withSynth({ impactNoiseHz: -1 }))).toThrow();
+    expect(() => validateAudioConfig(withSynth({ padDetuneCents: -1 }))).toThrow();
   });
 });

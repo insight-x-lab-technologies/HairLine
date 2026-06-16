@@ -25,7 +25,7 @@
 
 Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 5 ondas
 autorais, 3 estágios curados, 3 classes de nave**.
-Testes: **405 passando** (55 arquivos). Ver `TEST_STRATEGY.md`.
+Testes: **440 passando** (58 arquivos). Ver `TEST_STRATEGY.md`.
 
 ---
 
@@ -333,24 +333,59 @@ Testes: **405 passando** (55 arquivos). Ver `TEST_STRATEGY.md`.
 
 ### Bloco B — Nível 1: "Arcade anos 80" deliberado (vetorial, sem assets)
 
-- ⬜ **P10-05** **Nave como silhueta coesa.** Redesenhar `makeShip` (no
-  `VectorTheme`) para uma forma única e legível em vez de 5 primitivos soltos.
-  Manter **hitbox ≠ sprite**, o anel de graze e a chama do motor; respeitar
-  forma/cor do cosmético (P6-01). Objetivo: parecer uma nave, não uma montagem.
+- ✅ **P10-05** **Nave como silhueta coesa.** `makeShip` (no `VectorTheme`)
+  redesenhado para uma **silhueta única** (`shipSilhouette` em `ui/shapes` —
+  caça com nariz/ombros/asas em flecha/pods de motor com entalhe), em vez de 5
+  primitivos soltos. Glow integrado segue a silhueta; o cosmético (P6-01)
+  continua aplicado — **cor** tinge o casco, **forma** vira **acento de
+  cockpit**. Mesma geometria pura usada no jogo e no **preview do Hangar**
+  (`HangarScene.drawShip`) ⇒ preview honesto. **Hitbox ≠ sprite** (ponto pequeno
+  nítido), tamanho estável entre naves, anel de graze/chama/i-frames/Foco
+  intactos. Render-only ⇒ determinismo/replay/hash intactos (422 testes; novo
+  `shipSilhouette` coberto em `tests/shapes.test.ts`). Falta só a conferência
+  visual manual com `npm run dev`. Ver `docs/issues/P10-05-nave-vetorial-coesa.md`.
 
-- ⬜ **P10-06** **Inimigos e chefes vetoriais com identidade.** Compor formas com
-  caráter por tipo/fase em vez de polígono genérico e `fillCircle`, mantendo
-  legíveis os telegraphs, escudo, partes destrutíveis e teleporte (`drawBoss`).
-  Continua gerativo a partir dos dados.
+- ✅ **P10-06** **Inimigos e chefes vetoriais com identidade.** O chefe deixou de
+  ser `fillCircle` puro: corpo = casco da `shape` do JSON + glow seguindo a forma
+  + **núcleo estelar contra-rotativo** (`starPoints` em `ui/shapes`) + olho
+  pulsante; **cor do JSON clareando por fase** ⇒ "fica mais perigoso" óbvio. Todas
+  as leituras de mecânica (barra de vida, telegraph, aro de núcleo invulnerável,
+  pods, escudo) preservadas e desenhadas à parte; fill contido (não encobre
+  balas). Inimigos ganharam **acento interno contra-rotativo + núcleo claro**
+  mantendo a leitura por tipo/cor. Gerativo (conteúdo novo no JSON ganha visual);
+  `BossSystem` expõe `shape`/`color` só para apresentação. Render-only ⇒
+  determinismo/replay/hash intactos (425 testes; `starPoints` coberto em
+  `tests/shapes.test.ts`). Falta a conferência visual manual (`npm run dev`,
+  cobrir os 5 chefes). Ver `docs/issues/P10-06-inimigos-chefes-vetoriais.md`.
 
-- ⬜ **P10-07** **Fundo de espaço procedural rico + parallax multicamada.**
-  Evoluir o starfield (`drawField`/`updateBackground`) para camadas de
-  profundidade, nebulosas (gradientes) e parallax — render-side, `Rng`
-  decorativo (sem `Math.random`, sem afetar a sim).
+- ✅ **P10-07** **Fundo de espaço procedural rico + parallax multicamada.**
+  Implementado: módulo PURO `src/render/background.ts` (campo de estrelas
+  multicamada + nebulosa; criação/avanço/reciclagem sem Phaser, sem
+  `Math.random`, sem alocação por frame), dirigido por dados na nova seção
+  `effects.json → background` (cor base, `starLayers` de profundidade, `nebula`),
+  validada no carregamento (`validateEffects`). O `VectorTheme` (`drawField`/
+  `updateBackground`) passou a desenhar a nebulosa (anéis concêntricos baratos —
+  sem blur) sob estrelas com cor/tamanho/alpha por camada (parallax). Render-only
+  ⇒ determinismo/replay/hash intactos (438 testes; novos `tests/background.test.ts`
+  + cobertura de `background` em `tests/effects.test.ts`). Contraste baixo
+  preserva a legibilidade de balas/anel. Falta só a conferência visual manual
+  (`npm run dev`). Ver `docs/issues/P10-07-fundo-espaco-procedural.md`.
 
-- ⬜ **P10-08** **Áudio "Arcade" melhorado.** Refinar a síntese (trilha de menu +
-  gameplay, SFX de explosão/impacto melhores) **sem** introduzir assets — elevando
-  o `SynthAudioTheme` à altura de um "arcade anos 80" intencional.
+- ✅ **P10-08** **Áudio "Arcade" melhorado.** Síntese do `SynthAudioTheme`
+  elevada **sem assets** (TD-09): SFX de impacto agora em camadas (transiente +
+  `thump` grave com queda de pitch + cauda de ruído com lowpass **descendente**) —
+  explosão/kill, hit, pulso e entrada de chefe com peso; trilha mais musical (pad
+  por lowpass + vozes destoadas em leque, rítmica filtrada, tensão com vibrato,
+  perigo com quinta de shimmer). Tuning por dados na nova seção `audio.json →
+  synth` (validada em `validateAudioConfig`). A *decisão* de som
+  (`AudioCues`/`MusicDirector`/`SfxPolicy`) e a interface `play(cue)` ficam
+  intactas; presets de trilha (cosmético `music`) e `previewMusic` preservados.
+  Presentation-only ⇒ determinismo intacto (440 testes; integridade de `synth`
+  em `tests/effects.test.ts`). **Decisão:** identidade sonora própria do **menu**
+  deixada fora de escopo (opcional na issue; risco de UX/autoplay) — a API
+  (`startMusic`/`setLayerTargets`/`previewMusic`) segue disponível. Falta a
+  conferência audível manual (`npm run dev`). Ver
+  `docs/issues/P10-08-audio-arcade-melhorado.md`.
 
 ### Bloco C — Nível 2: tema "Polido" (arte raster + áudio real, produção incremental)
 

@@ -99,5 +99,21 @@
       "gameover": [80, 60, 120],
       "victory": [30, 40, 30]
     }
+  },
+  "background": {
+    "baseColor": "#070912",
+    "starLayers": [
+      { "count": 38, "speed": 14, "size": 1, "color": "#2b6f78", "alpha": 0.3 },
+      { "count": 30, "speed": 48, "size": 1.5, "color": "#39f5e8", "alpha": 0.5 },
+      { "count": 18, "speed": 120, "size": 2.4, "color": "#9af7ef", "alpha": 0.8 }
+    ],
+    "nebula": {
+      "count": 5,
+      "driftY": 7,
+      "radiusMin": 120,
+      "radiusMax": 260,
+      "alpha": 0.05,
+      "colors": ["#16235c", "#3a1f5e", "#0e2f4a"]
+    }
   }
 }

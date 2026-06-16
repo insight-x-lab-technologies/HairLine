@@ -25,5 +25,13 @@
     "gainVar": 0.1,
     "duck": { "amount": 0.5, "durationMs": 300 },
     "duckCues": ["hit", "gameover", "victory"]
+  },
+  "synth": {
+    "impactNoiseHz": 2000,
+    "killSubHz": 92,
+    "hitSubHz": 64,
+    "pulseShimmerHz": 2600,
+    "padDetuneCents": 8,
+    "rhythmCutoffHz": 1700
   }
 }
