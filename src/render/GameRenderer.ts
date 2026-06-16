@@ -24,6 +24,11 @@ import type { HudPadding } from '../ui/hudLayout';
 
 /** Loadout cosmético resolvido (apresentação) que o tema aplica ao desenhar. */
 export interface ThemeCosmetics {
+  /**
+   * Id do cosmético de nave (P10-13): no tema sprite resolve a variante de arte
+   * curada (`spr-ship-<id>`); no vetorial é ignorado (usa `shipShape`/`shipColor`).
+   */
+  shipId: string;
   /** Forma da nave (id de `ui/shapes`), ex.: `arrow`. */
   shipShape: string;
   /** Cor da nave (0xRRGGBB). */

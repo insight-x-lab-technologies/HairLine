@@ -224,9 +224,11 @@ simulação — determinismo coberto por teste de regressão (`tests/hangar.test
 
 Acima dos cosméticos individuais, o **tema de apresentação** escolhe o *estilo
 inteiro* do jogo — qual **renderer** (visual) e qual **áudio** o jogo usa.
-Hoje há um: **"Arcade anos 80"** (neon vetorial + síntese), o visual/áudio atual;
-o **"Polido"** (sprites + samples) chega no Bloco C e aparece **sozinho** no
-seletor ao se registrar. Como o cosmético, o tema é **só apresentação**: nunca
+Hoje há dois: **"Arcade anos 80"** (neon vetorial + síntese), o visual/áudio
+atual; e **"Polido"** (sprites, P10-09/10), que **herda o Arcade** e desenha
+arte raster onde houver asset, caindo no vetorial onde faltar — então é jogável
+mesmo com a arte ainda chegando peça por peça. (Samples de áudio do "Polido"
+ficam para P10-12.) Como o cosmético, o tema é **só apresentação**: nunca
 toca a simulação/replay/ranking/Diário (mesma seed/inputs ⇒ mesmo resultado em
 qualquer tema). A escolha é **persistida no aparelho** e cai graciosamente no
 default `arcade` se ausente/inválida.
@@ -235,7 +237,62 @@ O seletor fica no **Menu** (linha de utilidades, ao lado de controle/vibração)
 um overlay lista os temas do registro com o atual marcado; tocar persiste, aplica
 o áudio na hora (vale já no menu) e passa a valer no visual na próxima run. O
 `PreloadScene` carrega **só** os assets do tema ativo (o vetorial não tem
-nenhum — não pesa o bundle de quem joga "Arcade"). Ver TD-30.
+nenhum — não pesa o bundle de quem joga "Arcade"). Ver TD-30. Assets do "Polido"
+ficam **fora do precache** do PWA (carregados sob demanda) para não pesar o
+Arcade. Ver TD-31.
+
+### Nave no tema "Polido" (P10-10)
+
+No tema **Polido**, a nave é **arte raster** (um sprite) no lugar da silhueta
+vetorial — mas com **o mesmo feel**: encolhe no Foco, pisca em i-frames e tem a
+chama do motor pulsando atrás do casco, tudo derivado dos mesmos estados da sim
+por uma função pura compartilhada com o Arcade. O **ponto de hitbox e o anel de
+graze continuam vetoriais por cima** do sprite (hitbox ≠ sprite): a arte nunca
+esconde a zona de risco nem compete com as balas (que também seguem neon). Sem a
+arte registrada, a nave volta ao vetorial sem erro. O **contrato de asset**
+(chave, centro = posição da sim, escala de referência, estados→variação) está em
+`docs/ASSET_CONTRACT.md`; chefe e inimigos seguem o mesmo fluxo.
+
+### Fundo de espaço raster (P10-11)
+
+No tema **Polido** o fundo procedural (P10-07) dá lugar a **camadas de arte
+ilustrada** — espaço distante, nebulosa e estrelas próximas — empilhadas sobre a
+cor base e com **parallax** (a camada distante desce devagar; a próxima, rápida),
+desenhadas como `TileSprite` que **rolam verticalmente** para dar a sensação de
+avanço. As camadas e velocidades vêm de dados (`data/polishedBackground.json`,
+presentation-only). O contraste é **baixo de propósito**: balas, anel e nave ficam
+sempre por cima e legíveis. No tema **Arcade** nada muda — segue o procedural. Sem
+os assets de fundo, o "Polido" **cai no procedural** sem erro (fallback). Os assets
+carregam só no "Polido" e ficam fora do precache do PWA (não pesam o Arcade).
+
+### Cosméticos × tema (P10-13)
+
+Cosméticos (P6-01) e tema (P10-04) são camadas independentes que se cruzam — a
+regra mantém legibilidade e evita multiplicar conteúdo:
+
+- **Cor** (nave e tiro): herda **sempre**, nos dois temas. No vetorial, é o
+  preenchimento/contorno; no sprite, é `setTint` sobre a arte. **Faíscas** do tiro
+  herdam a cor do tiro nos dois temas.
+- **Balas e anel de graze**: **sempre neon vetorial** nos dois temas. São a zona de
+  perigo/risco — independem do cosmético de arte (legibilidade > beleza).
+- **Forma da nave** (a parte que **não** mapeia 1:1 para arte): no **Arcade** vira o
+  acento de cockpit, como hoje. No **Polido**, segue uma cadeia de fallback clara:
+  **(1)** variante de arte **curada** `spr-ship-<idDoCosmético>` se registrada →
+  **(2)** senão a arte **default** da nave (`spr-ship`) tingida pela cor →
+  **(3)** senão a **silhueta vetorial** (com o acento de forma). Ou seja, a
+  silhueta só muda no sprite quando alguém **curou** uma variante; sem ela, todas
+  as naves usam a arte default tingida. Assim a arte é exigida **só** para os
+  cosméticos que se escolhe curar — nunca para a combinação cosmético×tema inteira
+  (sem explosão combinatória). Hoje não há variante curada registrada ⇒ o Polido
+  prova o fallback (default tingida).
+- **Trilha** (preset `music`): aplicada pelo áudio, **por tema** — o mesmo preset
+  soa como síntese no Arcade e como samples no Polido (TD-32).
+
+O **preview do Hangar é consciente do tema ativo**: como o `PreloadScene` só
+carrega os assets do tema escolhido, a simples presença (ou ausência) da textura
+de nave decide o preview — sprite tingido (variante curada ou default) no Polido,
+silhueta vetorial no Arcade. O modelo do preview é puro/headless (`hangarPreview`
+em `ui/hangar.ts`, testado). Ver TD-33.
 
 ### Nave vetorial coesa (P10-05, Bloco B)
 

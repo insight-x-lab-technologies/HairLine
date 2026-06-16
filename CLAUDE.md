@@ -6,6 +6,11 @@
 > `docs/ROADMAP.md` (status + IDs por item — abra sessões por `Pn-mm`),
 > `docs/PRODUCT_VISION.md`, `docs/GAME_DESIGN.md`, `docs/ARCHITECTURE.md`,
 > `docs/TECH_DECISIONS.md`, `docs/TEST_STRATEGY.md`, `docs/01-04*`
+>
+> **Para criar/ampliar temas de apresentação (arte/áudio):** veja
+> `docs/THEME_ASSET_GUIDE.md` (guia de produção de assets — chaves, dimensões,
+> formatos, regras de tint/fallback) + `docs/ASSET_CONTRACT.md` (integração por
+> entidade).
 
 ## O jogo (3 linhas)
 

@@ -7,7 +7,8 @@
 >
 > **Status:** ✅ feito · 🟡 parcial · ⬜ a fazer · ⏸️ adiado de propósito.
 > **Atualizado:** 2026-06 (Fase 4 em andamento; Fase 10 — temas visuais/áudio —
-> planejada e priorizada em 2026-06-15).
+> **código dos Blocos A/B/C entregue**; resta só **P10-10** = produção de arte
+> raster, incremental).
 > **Convenção de ID:** `P{fase}-{nn}`. IDs nunca são reaproveitados.
 
 ## Resumo de progresso
@@ -389,29 +390,53 @@ Testes: **440 passando** (58 arquivos). Ver `TEST_STRATEGY.md`.
 
 ### Bloco C — Nível 2: tema "Polido" (arte raster + áudio real, produção incremental)
 
-- ⬜ **P10-09** **`SpriteTheme` (código) com fallback vetorial.** Implementação que
-  desenha **sprites** lendo as mesmas posições da sim; onde faltar asset, **cai no
-  `VectorTheme`**. Pipeline de atlas no `PreloadScene`; pooling de sprites
-  (espelha o pooling existente — nunca `new` no loop). Sem nova lógica de jogo.
+- ✅ **P10-09** **`SpriteTheme` (código) com fallback vetorial.** `SpriteTheme`
+  herda o `VectorTheme` e sobrescreve só os *seams* por entidade (nave/inimigos/
+  chefe): desenha **sprites** lendo as mesmas posições da sim e, onde faltar asset,
+  **cai no `VectorTheme`** (resolução pura em `render/spriteFallback`). Balas e anel
+  seguem vetoriais. Pooling de sprites (`render/SpritePool`, nunca `new` no loop);
+  carga condicional no `PreloadScene` + PWA por tema (`globIgnores: sprites/**`).
+  Tema **"Polido"** registrado (placeholder da nave ⇒ prova do fallback parcial).
+  Sem nova lógica de jogo. Ver TD-31, `docs/issues/P10-09-sprite-theme-fallback.md`.
 
-- ⬜ **P10-10** **Arte raster incremental:** nave → chefes → inimigos (nesta
+- 🟡 **P10-10** **Arte raster incremental:** nave → chefes → inimigos (nesta
   ordem), cada peça substituível sem quebrar o jogo (o que não tem arte continua
   vetorial). Mapear estados visuais aos dados já existentes (dano/i-frames, fase do
-  chefe, partes, escudo).
+  chefe, partes, escudo). **Feito: fluxo + nave** — sprite no mesmo container da
+  silhueta (chama + hitbox/anel vetoriais por cima), feel idêntico via função pura
+  compartilhada (`render/shipVisual`, testada headless), fallback comprovado.
+  **Contrato de asset** documentado (`docs/ASSET_CONTRACT.md`) para repetir.
+  **Pendente:** arte de **chefes** e **inimigos** (mesmo fluxo — sub-sessões
+  P10-10a/b). Ver TD-31, `docs/issues/P10-10-arte-raster-incremental.md`.
 
-- ⬜ **P10-11** **Fundo de espaço em arte (parallax raster).** Camadas ilustradas
-  substituindo o procedural quando o tema Polido está ativo.
+- ✅ **P10-11** **Fundo de espaço em arte (parallax raster).** Camadas ilustradas
+  (`TileSprite`) com tiling vertical + parallax por dados (`data/
+  polishedBackground.json`; offset via função pura `render/parallaxBackground`,
+  testada headless) substituem o procedural **só** no tema Polido; sem os assets,
+  cai no procedural (P10-07) sem erro. Carga condicional + fora do precache PWA
+  (path `sprites/`). Placeholders tileáveis (sem emenda em 720×1280). Ver TD-31,
+  `docs/issues/P10-11-fundo-espaco-raster.md`.
 
-- ⬜ **P10-12** **Áudio real (samples).** `SampleAudioTheme` atrás de `play(cue)`:
-  música de menu + trilha de gameplay (mantendo a dinâmica do `MusicDirector`/
-  camadas) + SFX de explosão/impacto/pulso por samples. Carregamento condicional
-  (só com o tema de áudio real ativo).
+- ✅ **P10-12** **Áudio real (samples).** `SampleAudioTheme` atrás de `play(cue)`
+  (par sonoro do "Polido"): SFX por `AudioBufferSource` e trilha por faixas em loop
+  com cross-fade (camadas do `MusicDirector` → `trackMix` calm/intense). **Híbrido:
+  cai no `SynthAudioTheme` por cue/trilha** onde faltar buffer (sem samples ⇒
+  fallback, sem erro). Manifesto puro (`audio/sampleManifest`, chaves `aud-*`),
+  ponte Phaser→`sampleBank` no `PreloadScene`, carga condicional + fora do precache
+  PWA (path `audio/`). Mute/ducking/`SfxPolicy`/gesto seguem na fachada (P10-03).
+  Placeholders (`scripts/gen-placeholder-audio.mjs`) validam o fluxo; conteúdo final
+  troca os mesmos arquivos. Presentation-only ⇒ determinismo intacto (475 testes).
+  Ver TD-32, `docs/issues/P10-12-audio-samples.md`.
 
-- ⬜ **P10-13** **Cruzamento tema × cosméticos.** Decisão e implementação: os
-  cosméticos (forma/cor de nave, cor de tiro — P6-01) valem **plenos no
-  vetorial**; no sprite, um **conjunto curado** de variantes de arte (evita
-  multiplicar conteúdo). Garantir **balas e anel de graze em neon vetorial nos
-  dois temas** (legibilidade). Possível gancho de cosmético/monetização (P7).
+- ✅ **P10-13** **Cruzamento tema × cosméticos.** Decisão e implementação: a
+  **cor** (nave/tiro) herda nos dois temas (preenchimento no vetorial, `setTint`
+  no sprite); a **forma** da nave segue uma cadeia de fallback no sprite —
+  variante de arte **curada** (`spr-ship-<id>`) → arte default tingida → silhueta
+  vetorial (função pura `resolveShipSprite`, evita exigir arte por cosmético).
+  **Balas e anel de graze seguem neon vetorial nos dois temas** (já valia, TD-31).
+  Preview do Hangar **consciente do tema** (`hangarPreview`, puro). Presentation-
+  only: nada toca a sim ⇒ determinismo intacto (484 testes verdes). Ver TD-33,
+  `docs/issues/P10-13-tema-x-cosmeticos.md`.
 
 ---
 

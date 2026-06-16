@@ -9,19 +9,17 @@ import { getCosmetics, getAchievementDefs } from '../content';
 import {
   selectCosmetic,
   getLoadout,
-  findCosmetic,
   type CosmeticCatalog,
   type CosmeticKind,
-  type Loadout,
-  type ShipCosmetic,
-  type ShotColorCosmetic,
 } from '../services/Cosmetics';
 import {
   hangarGroups,
   cosmeticProfileFrom,
+  hangarPreview,
   type HangarGroup,
   type HangarItem,
 } from '../ui/hangar';
+import { shipVariantKey, spriteKey } from '../render/spriteFallback';
 
 /** Layout vertical de cada banda de grupo (rótulo, amostras, título, condição). */
 const BANDS: Readonly<Record<CosmeticKind, { label: number; swatch: number; title: number }>> = {
@@ -146,26 +144,58 @@ export class HangarScene extends Phaser.Scene {
     this.render();
   }
 
-  /** Preview honesto da seleção atual: a nave grande + tiros na cor escolhida. */
+  /**
+   * Preview honesto da seleção atual, CONSCIENTE DO TEMA (P10-13): tiros na cor
+   * escolhida (sempre vetorial) + a nave como o jogador a verá no tema ativo —
+   * sprite (variante curada ou default, tingida pela cor) quando o tema tem arte
+   * de nave carregada, senão a silhueta vetorial com acento de forma. A presença
+   * da textura (só o tema ativo é carregado pelo `PreloadScene`) é a prova do tema.
+   */
   private renderPreview(): void {
     const save = getSave();
-    const loadout: Loadout = getLoadout(this.catalog, cosmeticProfileFrom(save), save.getLoadoutSelection());
-    const ship = findCosmetic(this.catalog, loadout.shipId) as ShipCosmetic;
-    const shot = findCosmetic(this.catalog, loadout.shotColorId) as ShotColorCosmetic;
+    const preview = hangarPreview(
+      this.catalog,
+      cosmeticProfileFrom(save),
+      save.getLoadoutSelection(),
+      this.availableShipKeys(),
+    );
     const cx = VIRTUAL_WIDTH / 2;
     const cy = 820;
 
     this.root.add(neonText(this, cx, 752, '— PREVIEW —', 18, '#5a6b7a'));
     const g = this.add.graphics();
-    // Tiros (cor do cosmético) subindo da nave.
-    const shotInt = Phaser.Display.Color.HexStringToColor(shot.color).color;
+    // Tiros (cor do cosmético) subindo da nave — vetoriais nos dois temas.
+    const shotInt = Phaser.Display.Color.HexStringToColor(preview.shotColor).color;
     for (let i = 0; i < 3; i++) {
       const sy = cy - 90 - i * 46;
       g.fillStyle(shotInt, 0.3).fillCircle(cx, sy, 16);
       g.fillStyle(shotInt, 1).fillCircle(cx, sy, 7);
     }
-    this.drawShip(g, ship.shape, Phaser.Display.Color.HexStringToColor(ship.color).color, cx, cy, 66);
+    const shipInt = Phaser.Display.Color.HexStringToColor(preview.shipColor).color;
+    if (preview.shipMode === 'sprite' && preview.shipSpriteKey) {
+      // Tema sprite: a MESMA arte do jogo, tingida pela cor (paridade com `makeShip`).
+      this.root.add(
+        this.add.sprite(cx, cy, preview.shipSpriteKey).setDisplaySize(128, 128).setTint(shipInt),
+      );
+    } else {
+      this.drawShip(g, preview.shipShape, shipInt, cx, cy, 66);
+    }
     this.root.add(g);
+  }
+
+  /**
+   * Chaves de textura de nave disponíveis para o cosmético selecionado: a
+   * variante curada (`spr-ship-<id>`) e a default (`spr-ship`), só as que existem
+   * no cache. Vazio no tema vetorial (nenhum sprite carregado) ⇒ preview vetorial.
+   */
+  private availableShipKeys(): Set<string> {
+    const save = getSave();
+    const loadout = getLoadout(this.catalog, cosmeticProfileFrom(save), save.getLoadoutSelection());
+    const keys = new Set<string>();
+    for (const k of [shipVariantKey(loadout.shipId), spriteKey('ship')]) {
+      if (this.textures.exists(k)) keys.add(k);
+    }
+    return keys;
   }
 
   /** Desenha a amostra de um item conforme o tipo. */

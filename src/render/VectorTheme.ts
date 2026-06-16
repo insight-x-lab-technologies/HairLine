@@ -18,6 +18,7 @@ import type { EffectsConfig } from '../content/types';
 import type { FxEventType } from '../sim/FxEvents';
 import type { HudPadding } from '../ui/hudLayout';
 import type { GameRenderer, RenderContext, ThemeCosmetics } from './GameRenderer';
+import { shipVisualState, type ShipVisualState } from './shipVisual';
 import playerData from '../data/player.json';
 
 /** Achata `Pt[]` em `[x0, y0, x1, y1, …]` para o construtor de `polygon`. */
@@ -34,10 +35,13 @@ function flatPoints(pts: readonly Pt[]): number[] {
  * A nave desenha um ponto central pequeno = HITBOX ≠ SPRITE (docs/02 §3.5).
  */
 export class VectorTheme implements GameRenderer {
-  private scene!: Phaser.Scene;
+  // `protected` (não `private`): o `SpriteTheme` (P10-09) herda este tema como
+  // fallback e sobrescreve só os seams de desenho por entidade (nave/inimigos/
+  // chefe), reusando o resto (balas, anel, partículas, foco, fundo).
+  protected scene!: Phaser.Scene;
 
-  private ship!: Phaser.GameObjects.Container;
-  private engine!: Phaser.GameObjects.Triangle;
+  protected ship!: Phaser.GameObjects.Container;
+  protected engine!: Phaser.GameObjects.Triangle;
   private bgGfx!: Phaser.GameObjects.Graphics;
   /** Campo de estrelas multicamada (parallax) e nebulosa — P10-07. */
   private stars: Star[] = [];
@@ -74,9 +78,9 @@ export class VectorTheme implements GameRenderer {
   private prevFocus = 0;
 
   /** Loadout cosmético resolvido (P6-01-02): só apresentação. */
-  private shipShape = 'arrow';
-  private shipColor = 0x0bd3c6;
-  private shotColor = 0xffe066;
+  protected shipShape = 'arrow';
+  protected shipColor = 0x0bd3c6;
+  protected shotColor = 0xffe066;
 
   init(scene: Phaser.Scene, cosmetics: ThemeCosmetics): void {
     this.scene = scene;
@@ -193,47 +197,21 @@ export class VectorTheme implements GameRenderer {
   }
 
   draw(sim: Simulation, ctx: RenderContext): void {
-    // Nave: segue a posição AUTORITATIVA da sim (a lógica de movimento vive no
-    // headless sim; aqui é só apresentação).
-    const player = sim.player;
-    this.ship.setPosition(player.x, player.y);
-    this.ship.setScale(ctx.focus ? 0.7 : 1);
-    // Pisca a nave (vermelho) enquanto invulnerável — feedback claro de dano.
-    const inv = sim.state.invulnerable;
-    const shipAlpha = inv ? 0.35 + 0.35 * Math.sin(ctx.time / 35) : 1;
-    this.ship.setAlpha(shipAlpha);
-    // Chama do motor pulsando.
-    this.engine.setScale(1, 0.7 + 0.3 * Math.sin(ctx.time / 60));
-    // Anel de graze ao redor da nave (P5-02-02): zona de risco legível.
-    this.drawGrazeRing(sim, player.x, player.y, shipAlpha, ctx.focus);
-
-    // Inimigos: forma por tipo + glow, girando suavemente, com acento interno
-    // contra-rotativo e núcleo claro (P10-06: mais caráter, mesma leitura).
-    this.enemyGfx.clear();
-    const g = this.enemyGfx;
-    sim.enemies.forEachActive((e) => {
-      const color = Phaser.Display.Color.HexStringToColor(e.color).color;
-      const light = this.lightenColor(color, 80);
-      const rot = e.ageTicks * 0.03;
-      g.fillStyle(color, 0.18).fillCircle(e.x, e.y, e.radius * 1.5); // glow
-      g.fillStyle(color, 0.9).lineStyle(2, 0xffffff, 0.85);
-      const pts = shapePoints(e.shape, e.x, e.y, e.radius, rot);
-      if (pts.length === 0) {
-        g.fillCircle(e.x, e.y, e.radius).strokeCircle(e.x, e.y, e.radius);
-      } else {
-        // pts é {x,y}[]; o runtime aceita, mas o tipo pede Vector2[].
-        const poly = pts as unknown as Phaser.Math.Vector2[];
-        g.fillPoints(poly, true).strokePoints(poly, true);
-      }
-      // Acento interno contra-rotativo (quando há forma) + núcleo claro.
-      const inner = shapePoints(e.shape, e.x, e.y, e.radius * 0.5, -rot * 1.5);
-      if (inner.length > 0) {
-        const ip = inner as unknown as Phaser.Math.Vector2[];
-        g.lineStyle(1.5, light, 0.8).strokePoints(ip, true);
-      }
-      g.fillStyle(light, 0.95).fillCircle(e.x, e.y, e.radius * 0.28);
+    // Transform de apresentação da nave (P10-10): escala no Foco, piscar em
+    // i-frames e pulso da chama vêm de uma função PURA, compartilhada com o
+    // sprite — o feel é idêntico entre temas. O alpha é reusado pelo anel de
+    // graze (sempre vetorial), que acompanha o piscar da nave.
+    const ship = shipVisualState({
+      focus: ctx.focus,
+      invulnerable: sim.state.invulnerable,
+      timeMs: ctx.time,
     });
-
+    // Seams sobrescritos pelo SpriteTheme (P10-09): nave/inimigos/chefe podem
+    // virar sprite; balas, anel, partículas e foco permanecem vetoriais (req 3).
+    this.drawShip(sim, ship);
+    // Anel de graze ao redor da nave (P5-02-02): zona de risco legível.
+    this.drawGrazeRing(sim, sim.player.x, sim.player.y, ship.alpha, ctx.focus);
+    this.drawEnemies(sim);
     this.drawBoss(sim);
 
     // Tiros do jogador: glow na cor do cosmético (P6-01-02) + núcleo claro.
@@ -263,6 +241,56 @@ export class VectorTheme implements GameRenderer {
     this.drawFocusBar(sim);
   }
 
+  // ---- Seams por entidade (sobrescritos pelo SpriteTheme — P10-09) ----------
+
+  /**
+   * Desenha a nave a partir da posição AUTORITATIVA da sim (a lógica de
+   * movimento vive no headless sim; aqui é só apresentação) aplicando o transform
+   * já resolvido (`shipVisualState`). Seam reusado pelo SpriteTheme (P10-10): a
+   * mesma posição/escala/alpha/chama valem para a silhueta vetorial OU o sprite —
+   * o tema só troca o CORPO em `makeShip`, não o comportamento.
+   */
+  protected drawShip(sim: Simulation, vis: ShipVisualState): void {
+    const player = sim.player;
+    this.ship.setPosition(player.x, player.y);
+    this.ship.setScale(vis.scale);
+    this.ship.setAlpha(vis.alpha);
+    // Chama do motor pulsando.
+    this.engine.setScale(1, vis.engineScaleY);
+  }
+
+  /**
+   * Desenha os inimigos: forma por tipo + glow, girando suavemente, com acento
+   * interno contra-rotativo e núcleo claro (P10-06: mais caráter, mesma leitura).
+   * Seam: o SpriteTheme troca cada inimigo por um sprite quando há asset.
+   */
+  protected drawEnemies(sim: Simulation): void {
+    this.enemyGfx.clear();
+    const g = this.enemyGfx;
+    sim.enemies.forEachActive((e) => {
+      const color = Phaser.Display.Color.HexStringToColor(e.color).color;
+      const light = this.lightenColor(color, 80);
+      const rot = e.ageTicks * 0.03;
+      g.fillStyle(color, 0.18).fillCircle(e.x, e.y, e.radius * 1.5); // glow
+      g.fillStyle(color, 0.9).lineStyle(2, 0xffffff, 0.85);
+      const pts = shapePoints(e.shape, e.x, e.y, e.radius, rot);
+      if (pts.length === 0) {
+        g.fillCircle(e.x, e.y, e.radius).strokeCircle(e.x, e.y, e.radius);
+      } else {
+        // pts é {x,y}[]; o runtime aceita, mas o tipo pede Vector2[].
+        const poly = pts as unknown as Phaser.Math.Vector2[];
+        g.fillPoints(poly, true).strokePoints(poly, true);
+      }
+      // Acento interno contra-rotativo (quando há forma) + núcleo claro.
+      const inner = shapePoints(e.shape, e.x, e.y, e.radius * 0.5, -rot * 1.5);
+      if (inner.length > 0) {
+        const ip = inner as unknown as Phaser.Math.Vector2[];
+        g.lineStyle(1.5, light, 0.8).strokePoints(ip, true);
+      }
+      g.fillStyle(light, 0.95).fillCircle(e.x, e.y, e.radius * 0.28);
+    });
+  }
+
   // ---- Apresentação por responsabilidade -----------------------------------
 
   /** Pré-converte as cores próprias de cada tipo de partícula (hex→int). */
@@ -273,7 +301,7 @@ export class VectorTheme implements GameRenderer {
   }
 
   /** hex "#rrggbb" → int, com cache (evita realocar Color no caminho quente). */
-  private colorOf(hex: string): number {
+  protected colorOf(hex: string): number {
     const cached = this.colorCache.get(hex);
     if (cached !== undefined) return cached;
     const n = Number.parseInt(hex.replace('#', ''), 16) | 0;
@@ -349,7 +377,7 @@ export class VectorTheme implements GameRenderer {
   }
 
   /** Desenha o chefe (corpo neon + barra de vida) a partir do estado da sim. */
-  private drawBoss(sim: Simulation): void {
+  protected drawBoss(sim: Simulation): void {
     this.bossGfx.clear();
     const boss = sim.boss;
     if (!boss || !boss.alive) return;
@@ -510,7 +538,7 @@ export class VectorTheme implements GameRenderer {
     }
   }
 
-  private makeShip(): Phaser.GameObjects.Container {
+  protected makeShip(): Phaser.GameObjects.Container {
     const scene = this.scene;
     // Cor vem do cosmético resolvido (P6-01-02); tamanho é constante entre
     // naves — HITBOX ≠ SPRITE (§3.5): nave maior NÃO é hitbox maior.
@@ -545,7 +573,7 @@ export class VectorTheme implements GameRenderer {
   }
 
   /** Clareia (amount>0) ou escurece (amount<0) uma cor int — contorno/asa neon. */
-  private lightenColor(color: number, amount: number): number {
+  protected lightenColor(color: number, amount: number): number {
     const clamp = (v: number): number => Math.max(0, Math.min(255, v));
     const r = clamp(((color >> 16) & 0xff) + amount);
     const g = clamp(((color >> 8) & 0xff) + amount);

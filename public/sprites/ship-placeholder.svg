@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Placeholder do tema "Polido" (P10-09): sprite da nave. Branco em fundo
+  transparente para que o `SpriteTheme` o tinja com a cor do cosmético
+  (setTint). Arte final entra em P10-10; até lá este placeholder VALIDA o
+  pipeline (carga condicional + pool + render por sprite + fallback parcial).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="-32 -32 64 64">
+  <!-- Silhueta de caça apontando para cima (origem no centro). -->
+  <polygon points="0,-28 18,16 0,6 -18,16" fill="#ffffff" stroke="#ffffff" stroke-width="2" stroke-linejoin="round"/>
+  <circle cx="0" cy="-2" r="5" fill="#cfeffd"/>
+</svg>

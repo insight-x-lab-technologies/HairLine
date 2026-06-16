@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fundo "Polido" (P10-11) — camada DISTANTE: poeira de estrelas fraca sobre fundo
+  transparente (a cor base do espaço fica por baixo). Padrão 80×80 px (80 divide
+  720 e 1280) ⇒ tiling vertical SEM emenda. Placeholder; arte final entra pelo
+  mesmo slot (`spr-bg-far`).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1280" viewBox="0 0 720 1280">
+  <defs>
+    <pattern id="far" width="80" height="80" patternUnits="userSpaceOnUse">
+      <circle cx="14" cy="22" r="1.1" fill="#7fd6ff" opacity="0.45"/>
+      <circle cx="58" cy="54" r="0.9" fill="#bfe9ff" opacity="0.38"/>
+      <circle cx="36" cy="68" r="0.8" fill="#ffffff" opacity="0.3"/>
+      <circle cx="68" cy="12" r="0.7" fill="#9fe0ff" opacity="0.32"/>
+    </pattern>
+  </defs>
+  <rect width="720" height="1280" fill="url(#far)"/>
+</svg>

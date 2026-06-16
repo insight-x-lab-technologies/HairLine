@@ -433,7 +433,127 @@ qualquer tema ⇒ mesmo hash/replay/ranking. Testes headless cobrem o registro
 (lista/atual/fallback) e a persistência (ida-e-volta, vazio ⇒ default); carga
 condicional e feel são conferência manual (`TEST_STRATEGY.md`). Ver TD-28/TD-29.
 
+## TD-31 — Tema "Polido" por sprites com fallback vetorial + pipeline/PWA por tema (P10-09) ✅
+**Problema:** o eixo visual só vira "dois temas" de verdade quando existe um
+renderer por **sprites** (arte raster) sem deixar o jogo inconsistente enquanto a
+arte entra incrementalmente (P10-10/11). E os assets do tema "Polido" não podem
+inchar o bundle/PWA do **arcade** (default, sem assets).
+
+**Decisão — herança, não composição.** `SpriteTheme extends VectorTheme`: por
+padrão o tema **é** o vetorial (fallback total). Só sobrescreve os *seams* por
+entidade (`drawShip`/`drawEnemies`/`drawBoss`, mais `makeShip`) — para isso o
+`VectorTheme` extraiu esses métodos e abriu `protected` (campos `scene`/`ship`/
+`engine`, helpers `colorOf`/`lightenColor`). É a **menor abordagem segura** para
+"cai no vetorial onde faltar asset" sem duplicar desenho. **Balas e anel de graze
+NÃO são seams** ⇒ herdam o pai e permanecem **vetoriais neon** nos dois temas
+(legibilidade > beleza, req 3).
+
+**Resolução asset×fallback é pura.** `render/spriteFallback.ts` (sem Phaser):
+convenção de chave `spr-<categoria>` e `resolveSpriteSource(available, category)`
+dizem "usar sprite ou cair no vetorial". Testável headless; o runtime alimenta
+`available` a partir do cache de texturas do Phaser (`textures.exists`). Registrar
+a chave de uma categoria a habilita; até lá, vetorial. Hoje só **nave** tem
+placeholder ⇒ prova do fallback parcial (nave sprite, inimigos/chefe vetoriais).
+
+**Pooling (TD-07).** `render/SpritePool.ts` pré-aloca sprites de inimigos
+(`begin`/`next`/`end` por frame; ociosos invisíveis, nunca destruídos) — **sem
+`new` no loop**. Nave e chefe são sprites únicos criados no `init`. Pool saturado
+⇒ excedente cai no vetorial (não some inimigo). Cor do cosmético via `setTint`
+(Phaser 4: `setTintFill` é no-op — CLAUDE.md). As **mecânicas** do chefe (barra de
+vida, escudo, partes, telegraph, núcleo) seguem desenhadas pelo vetorial do pai.
+
+**Pipeline/PWA por tema.** O manifesto do tema (TD-30) lista os assets; o
+`PreloadScene` carrega **só** os do tema ativo. O `vite-plugin-pwa` exclui
+`sprites/**` do precache (`globIgnores`): o asset vai para `dist/` e é buscado
+**sob demanda** quando o "Polido" está ativo — o arcade não baixa/precacheia nada
+do "Polido". Conferido no build (precache não lista `sprites/`).
+
+**Linha vermelha — determinismo.** Como TD-28/TD-30, o tema é presentation-only:
+não entra em `SimulationOptions`/`ReplayRecorder`/`hashState()`. Trocar de tema
+não muda hash/replay/ranking. Cobertura headless: `spriteFallback` (seleção
+asset×fallback) + `themes` (registro do "polido"). Pool/integração/FPS/PWA são
+conferência manual (`TEST_STRATEGY.md`). Fecha a "Decisão em aberto" de atlas vs
+`Graphics`: **convivem** — sprite por cima, vetorial como base/fallback.
+
+## TD-32 — Áudio por samples (`SampleAudioTheme`) com fallback synth por cue (P10-12) ✅
+**Problema:** o eixo sonoro só vira "dois temas" quando existe reprodução por
+**samples** (buffers) atrás de `play(cue)` — par sonoro do "Polido" (TD-31) — sem
+quebrar a fachada (TD-29), sem regredir o arcade e tolerando que o conteúdo
+(SFX/faixas finais) entre incrementalmente.
+
+**Decisão — híbrido com fallback, não substituição.** `SampleAudioTheme`
+implementa `AudioTheme` e mantém um `SynthAudioTheme` interno como **fallback por
+cue e por trilha** (espelha `SpriteTheme`→vetorial, TD-31): onde há buffer no
+`sampleBank`, toca por `AudioBufferSource`; onde falta, delega ao synth. É a menor
+abordagem segura para "cai no synth onde faltar conteúdo" — nada quebra sem
+samples (req 4) e dropar um arquivo ativa o sample sem mudar código.
+
+**O transversal continua na fachada (TD-29).** Mute/ducking/`SfxPolicy`/gesto/
+contexto seguem no `AudioService`; o tema só recebe `backend` + `pitchFactor`/
+`gainFactor` por disparo. SFX = source descartável (`createBufferSource` por
+disparo, `playbackRate=pitch`, ganho por disparo; nunca reusar source — iOS/Safari).
+
+**Camadas do `MusicDirector` → cross-fade de 2 faixas.** A dinâmica em 4 camadas
+(base/rítmica/tensão/perigo) é mapeada para um cross-fade entre `calm` e `intense`
+por `sampleManifest.trackMix(LayerGains)` (puro/testável): `base=0`⇒silêncio
+(game over); tensão/perigo⇒intensa; rítmica⇒meio-termo; só base⇒calma. **Trade-off
+aceito:** faixas pré-mixadas perdem a granularidade das 4 camadas, mas evitam
+multiplicar peso/conteúdo; `setLayerTargets` aplica os mesmos ramps (in/out) do
+synth. Faixas por preset (`aud-music-<preset>-<faixa>`) ⇒ menu/gameplay têm faixas
+próprias via preset.
+
+**Ponte Phaser→tema.** `sampleManifest` (sem Phaser) fixa as chaves (`aud-sfx-*`,
+`aud-music-*`) que o manifesto do tema (TD-30) registra, o `PreloadScene`
+decodifica (Phaser → `AudioBuffer` no cache, independente de contexto) e o
+`sampleBank` (singleton) entrega ao tema. Vazio ⇒ tudo cai no synth.
+
+**Peso/PWA (como TD-31).** Áudio só no tema ativo; `audio/**` fora do precache
+(`globIgnores` + não casa `globPatterns`) — o arcade não baixa nada. Placeholders
+(`scripts/gen-placeholder-audio.mjs`, WAV curtos) **validam o fluxo**; o conteúdo
+final substitui os mesmos arquivos/chaves. Conferido no build (precache sem `.wav`).
+
+**Linha vermelha — determinismo.** Presentation-only (TD-28/29/30/31): nada entra
+em sim/replay/`hashState`. Cobertura headless: `sampleManifest` (mapeamento puro) +
+`SampleAudioTheme.dom` (roteamento sample/synth, no-op sem samples) + `themes`
+(manifesto de áudio do "polido"). Qualidade/latência/peso são conferência manual.
+
+## TD-33 — Cruzamento tema × cosméticos: variante de arte curada + fallback (P10-13) ✅
+**Problema:** cosméticos (P6-01) e tema (P10-04) são eixos independentes que se
+cruzam. No vetorial a nave tem **forma + cor**; no sprite "forma/cor" não mapeiam
+1:1 para arte. Sem uma regra, ou some a identidade do loadout no Polido, ou se
+exige arte para **cada** cosmético × tema × peça (explosão combinatória). Além
+disso o preview do Hangar precisa ser honesto **por tema**.
+
+**Decisão — cor sempre herda; forma cai numa cadeia de fallback clara.** A regra
+fica numa função **pura** (`resolveShipSprite` em `render/spriteFallback`, testável
+headless): **(1)** variante curada `spr-ship-<idDoCosmético>` se registrada →
+**(2)** arte default `spr-ship` tingida pela cor → **(3)** silhueta vetorial (com
+acento de forma). A **cor** herda sempre (preenchimento no vetorial; `setTint` no
+sprite, Phaser 4). Só a **silhueta** depende de haver variante curada — sem ela,
+todas as naves usam a default tingida. Assim arte é exigida **só** para os
+cosméticos que se escolhe curar, nunca para a matriz inteira. É a menor abordagem
+segura: o `SpriteTheme` herda o vetorial (TD-31) e já tinge a nave; aqui só
+escolhe a textura no `init` (`makeShip` herdado a lê — sem `new` no loop).
+
+**Balas e anel de graze: sempre neon vetorial** nos dois temas (não são *seams* —
+TD-31). Cor de **tiro/faíscas** herda nos dois temas (já valia; tiro é vetorial).
+Trilha (`music`) é por-tema (síntese no Arcade, samples no Polido — TD-32).
+
+**Preview do Hangar consciente do tema.** `hangarPreview` (puro, `ui/hangar.ts`)
+decide sprite×vetorial pela **disponibilidade da textura** — e como o
+`PreloadScene` só carrega o tema ativo (TD-30), isso reflete o tema sem o Hangar
+conhecer o id do tema. `ThemeCosmetics.shipId` foi adicionado para o sprite
+resolver a variante (o vetorial o ignora). Nenhuma arte curada existe hoje ⇒ o
+Polido exercita o caminho default-tingida.
+
+**Linha vermelha — determinismo.** Presentation-only como TD-22/28/30/31: o
+`shipId` cosmético resolve **render**, nunca entra em sim/replay/`hashState`/
+ranking (≠ classe de nave, TD-25). Cobertura headless: `spriteFallback`
+(resolução nave×variante×fallback) + `hangar` (modelo de preview por tema) +
+regressão de determinismo reexecutada. Aplicação visual é conferência manual.
+
 ## Decisões em aberto (revisitar quando necessário)
 - Formato compacto de replay (bitpacking de inputs) — hoje é array por tick.
-- Atlas único de sprites vs `Graphics` — só se a performance exigir (Fase 5).
+- ~~Atlas único de sprites vs `Graphics`~~ — resolvido em TD-31: convivem (sprite
+  sobre fallback vetorial). Atlas único (vs imagens soltas) decide-se em P10-10/11.
 - Re-simulação de replay no servidor (anti-cheat v2).

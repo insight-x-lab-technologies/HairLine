@@ -1,0 +1,7 @@
+{
+  "layers": [
+    { "key": "spr-bg-far", "speedPxPerSec": 6 },
+    { "key": "spr-bg-nebula", "speedPxPerSec": 16 },
+    { "key": "spr-bg-near", "speedPxPerSec": 38 }
+  ]
+}

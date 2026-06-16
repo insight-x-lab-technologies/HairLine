@@ -13,13 +13,17 @@ import type { SaveService } from '../services/SaveService';
 import {
   isUnlocked,
   getLoadout,
+  findCosmetic,
   type Cosmetic,
   type CosmeticCatalog,
   type CosmeticKind,
   type CosmeticProfile,
   type Loadout,
+  type ShipCosmetic,
+  type ShotColorCosmetic,
   type UnlockCondition,
 } from '../services/Cosmetics';
+import { resolveShipSprite } from '../render/spriteFallback';
 
 /** Rótulo legível por estatística de perfil (vocabulário de `KNOWN_STATS`). */
 const STAT_LABEL: Readonly<Record<string, string>> = {
@@ -85,6 +89,50 @@ export function cosmeticProfileFrom(save: SaveService): CosmeticProfile {
     // `bestScore` é mantido fora dos totais acumulados (P6-02-01), mas o
     // catálogo desbloqueia por ele; a ponte o injeta para a avaliação fechar.
     totals: { ...totals, bestScore: save.getBestScore() },
+  };
+}
+
+/**
+ * Preview do Hangar consciente do tema (P10-13): decide como a nave selecionada
+ * deve ser desenhada no preview para refletir HONESTAMENTE o tema ativo. A
+ * disponibilidade de textura (`availableShipKeys`) é a prova do tema: o
+ * `PreloadScene` só carrega assets do tema ativo, então o tema vetorial não
+ * registra sprite (⇒ `vector`) e o sprite registra `spr-ship`/variante (⇒ `sprite`).
+ * Modelo PURO — a cena só desenha o que isto descreve. Tiro/balas/anel seguem
+ * vetoriais nos dois temas (não entram aqui além da cor de tiro).
+ */
+export interface HangarPreview {
+  /** Como desenhar o corpo da nave no tema ativo. */
+  readonly shipMode: 'sprite' | 'vector';
+  /** Textura da nave quando `shipMode === 'sprite'` (variante curada ou default). */
+  readonly shipSpriteKey?: string;
+  /** A nave-sprite é a variante curada do cosmético (true) ou a default (false). */
+  readonly curated: boolean;
+  /** Cor #hex do corpo (tint do sprite OU preenchimento vetorial). */
+  readonly shipColor: string;
+  /** Forma do cosmético (acento de cockpit no modo vetorial). */
+  readonly shipShape: string;
+  /** Cor #hex do tiro (sempre vetorial nos dois temas). */
+  readonly shotColor: string;
+}
+
+export function hangarPreview(
+  catalog: CosmeticCatalog,
+  profile: CosmeticProfile,
+  selection: Partial<Loadout>,
+  availableShipKeys: Iterable<string>,
+): HangarPreview {
+  const loadout = getLoadout(catalog, profile, selection);
+  const ship = findCosmetic(catalog, loadout.shipId) as ShipCosmetic;
+  const shot = findCosmetic(catalog, loadout.shotColorId) as ShotColorCosmetic;
+  const src = resolveShipSprite(availableShipKeys, loadout.shipId);
+  return {
+    shipMode: src.useSprite ? 'sprite' : 'vector',
+    ...(src.useSprite ? { shipSpriteKey: src.key } : {}),
+    curated: src.curated,
+    shipColor: ship.color,
+    shipShape: ship.shape,
+    shotColor: shot.color,
   };
 }
 

@@ -41,9 +41,18 @@ export interface ThemeDefinition {
 export const DEFAULT_THEME_ID = 'arcade';
 
 /**
- * Temas registrados. Hoje só o **arcade** (neon vetorial + synth, sem assets);
- * o "Polido" (sprite + samples) se registra aqui no Bloco C e aparece sozinho no
- * seletor.
+ * Temas registrados.
+ *
+ * - **arcade**: neon vetorial + synth, SEM assets (nada a carregar/precachear).
+ * - **polido** (P10-09): renderer por sprites (`SpriteTheme`) que herda o
+ *   vetorial e CAI nele onde faltar arte. O manifesto carrega só os assets do
+ *   próprio tema (carga condicional no `PreloadScene`); o `vite-plugin-pwa`
+ *   exclui esses assets do precache para não inchar o arcade. Áudio pelo tema
+ *   `sample` (P10-12, `SampleAudioTheme`): toca por buffers e cai no synth onde
+ *   faltar conteúdo. A chave de cada sprite segue `spr-<categoria>`
+ *   (ver `render/spriteFallback`): registrar a chave habilita a categoria; o
+ *   resto segue vetorial. Hoje só a **nave** tem placeholder ⇒ prova do fallback
+ *   parcial (nave por sprite, inimigos/chefe vetoriais).
  */
 const THEMES: readonly ThemeDefinition[] = [
   {
@@ -52,6 +61,33 @@ const THEMES: readonly ThemeDefinition[] = [
     rendererId: 'vector',
     audioThemeId: 'synth',
     assets: [],
+  },
+  {
+    id: 'polido',
+    label: 'Polido',
+    rendererId: 'sprite',
+    audioThemeId: 'sample',
+    assets: [
+      { key: 'spr-ship', url: 'sprites/ship-placeholder.svg', type: 'image' },
+      // Fundo raster por camadas (P10-11): tileáveis, parallax por dados
+      // (`render/parallaxBackground`). Carregam só no "polido"; fora do precache
+      // PWA (path `sprites/`). Sem eles, o fundo cai no procedural (fallback).
+      { key: 'spr-bg-far', url: 'sprites/bg-far.svg', type: 'image' },
+      { key: 'spr-bg-nebula', url: 'sprites/bg-nebula.svg', type: 'image' },
+      { key: 'spr-bg-near', url: 'sprites/bg-near.svg', type: 'image' },
+      // Áudio por samples (P10-12): SFX por cue + faixas calm/intense do preset
+      // `default` (cross-fade). Chaves seguem a convenção de `audio/sampleManifest`
+      // (`aud-sfx-*` / `aud-music-*`). Carregam só no "polido"; fora do precache
+      // PWA (path `audio/`). Sem cada buffer, o cue/trilha cai no synth (fallback
+      // por cue — `SampleAudioTheme`). Placeholders validam o fluxo; o conteúdo
+      // final é trocado nos mesmos caminhos, sem mudar código.
+      { key: 'aud-sfx-kill', url: 'audio/sfx-kill.wav', type: 'audio' },
+      { key: 'aud-sfx-hit', url: 'audio/sfx-hit.wav', type: 'audio' },
+      { key: 'aud-sfx-graze', url: 'audio/sfx-graze.wav', type: 'audio' },
+      { key: 'aud-sfx-pulse', url: 'audio/sfx-pulse.wav', type: 'audio' },
+      { key: 'aud-music-default-calm', url: 'audio/music-default-calm.wav', type: 'audio' },
+      { key: 'aud-music-default-intense', url: 'audio/music-default-intense.wav', type: 'audio' },
+    ],
   },
 ];
 

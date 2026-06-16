@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
   hangarGroups,
+  hangarPreview,
   conditionText,
   cosmeticProfileFrom,
   GROUP_LABEL,
 } from '../src/ui/hangar';
+import { spriteKey, shipVariantKey } from '../src/render/spriteFallback';
 import {
   getLoadout,
   type CosmeticCatalog,
@@ -104,6 +106,45 @@ describe('hangar — modelo de exibição (P6-01-02)', () => {
     const ships = groups[0]!.items;
     expect(ships[0]!.selected).toBe(true);
     expect(ships[1]!.selected).toBe(false);
+  });
+});
+
+describe('hangar — preview consciente do tema (P10-13)', () => {
+  it('sem sprite de nave carregado (tema vetorial) ⇒ preview vetorial com forma/cor', () => {
+    const p = hangarPreview(catalog(), profile({}), {}, new Set<string>());
+    expect(p.shipMode).toBe('vector');
+    expect(p.shipSpriteKey).toBeUndefined();
+    expect(p.curated).toBe(false);
+    expect(p.shipShape).toBe('arrow');
+    expect(p.shipColor).toBe('#0bd3c6');
+    // Tiro sempre presente (vetorial nos dois temas).
+    expect(p.shotColor).toBe('#ffe066');
+  });
+
+  it('arte default carregada (tema sprite) ⇒ preview por sprite tingido, não curado', () => {
+    const p = hangarPreview(catalog(), profile({}), {}, new Set([spriteKey('ship')]));
+    expect(p.shipMode).toBe('sprite');
+    expect(p.shipSpriteKey).toBe(spriteKey('ship'));
+    expect(p.curated).toBe(false);
+    // A cor segue herdando (tint do sprite) — honestidade do preview.
+    expect(p.shipColor).toBe('#0bd3c6');
+  });
+
+  it('variante curada do cosmético selecionado ⇒ preview usa a variante', () => {
+    const prof = profile({ totals: { totalGraze: 600 } });
+    const keys = new Set([spriteKey('ship'), shipVariantKey('ship-prism')]);
+    const p = hangarPreview(catalog(), prof, { shipId: 'ship-prism' }, keys);
+    expect(p.shipMode).toBe('sprite');
+    expect(p.shipSpriteKey).toBe(shipVariantKey('ship-prism'));
+    expect(p.curated).toBe(true);
+    expect(p.shipColor).toBe('#a78bfa');
+  });
+
+  it('seleção bloqueada cai no default também no preview (sem erro)', () => {
+    // perfil sem graze: ship-prism bloqueado ⇒ default; preview reflete o default.
+    const p = hangarPreview(catalog(), profile({}), { shipId: 'ship-prism' }, new Set([spriteKey('ship')]));
+    expect(p.shipColor).toBe('#0bd3c6');
+    expect(p.shipShape).toBe('arrow');
   });
 });
 

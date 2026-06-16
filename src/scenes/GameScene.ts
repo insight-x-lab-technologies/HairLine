@@ -422,6 +422,7 @@ export class GameScene extends Phaser.Scene {
     const music = findCosmetic(catalog, loadout.musicId) as MusicCosmetic;
     this.musicPreset = music.preset;
     return {
+      shipId: loadout.shipId,
       shipShape: ship.shape,
       shipColor: Phaser.Display.Color.HexStringToColor(ship.color).color,
       shotColor: Phaser.Display.Color.HexStringToColor(shot.color).color,

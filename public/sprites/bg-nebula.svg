@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fundo "Polido" (P10-11) — camada NEBULOSA: poucos discos suaves de baixo
+  contraste (glow), longe das bordas verticais para a emenda do tiling ser
+  imperceptível. Velocidade intermediária (parallax). Placeholder; slot
+  `spr-bg-nebula`.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="1280" viewBox="0 0 720 1280">
+  <defs>
+    <radialGradient id="n1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#3a2f7a" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#3a2f7a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="n2" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#1f5e6b" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#1f5e6b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <circle cx="220" cy="360" r="240" fill="url(#n1)"/>
+  <circle cx="540" cy="760" r="280" fill="url(#n2)"/>
+  <circle cx="320" cy="980" r="200" fill="url(#n1)"/>
+</svg>

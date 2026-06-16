@@ -3,6 +3,7 @@ import { SceneKeys } from '../config/sceneKeys';
 import { VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '../config/layout';
 import { resolveTheme } from '../config/themes';
 import { getSave } from '../services/SaveService';
+import { setSampleBank } from '../services/audio/sampleBank';
 
 /**
  * PreloadScene — carrega assets e mostra uma barra de progresso. Carregamento
@@ -44,15 +45,44 @@ export class PreloadScene extends Phaser.Scene {
     this.load.image('__favicon', 'favicon.svg');
 
     // Manifesto do tema ATIVO apenas (P10-04). Vetorial = lista vazia (no-op);
-    // o tema "polido" registrará atlas/áudio e só estes serão carregados.
+    // o tema "polido" registra sprites + áudio e só estes serão carregados.
     const theme = resolveTheme(getSave().getSelectedThemeId());
+    this.audioKeys = [];
     for (const asset of theme.assets) {
-      if (asset.type === 'audio') this.load.audio(asset.key, asset.url);
-      else this.load.image(asset.key, asset.url);
+      if (asset.type === 'audio') {
+        this.load.audio(asset.key, asset.url);
+        this.audioKeys.push(asset.key);
+      } else {
+        this.load.image(asset.key, asset.url);
+      }
     }
   }
 
   create(): void {
+    // Tema de áudio por samples (P10-12): o Phaser já decodificou os áudios do
+    // manifesto para `AudioBuffer` no cache; monta o `sampleBank` que o
+    // `SampleAudioTheme` lê. Só as chaves efetivamente decodificadas entram —
+    // arquivo ausente (loaderror) simplesmente cai no synth (fallback por cue).
+    this.registerSampleBank();
     this.scene.start(SceneKeys.Menu);
+  }
+
+  /** Chaves de áudio carregadas no preload (manifesto do tema ativo). */
+  private audioKeys: string[] = [];
+
+  /**
+   * Coleta os `AudioBuffer` decodificados pelo Phaser e popula o `sampleBank`.
+   * `AudioBuffer` é independente de contexto, então os buffers servem ao
+   * `AudioContext` próprio da fachada de áudio. No-op quando não há áudio no tema.
+   */
+  private registerSampleBank(): void {
+    const bank = new Map<string, AudioBuffer>();
+    for (const key of this.audioKeys) {
+      const buf = this.cache.audio.get(key) as unknown;
+      if (typeof AudioBuffer !== 'undefined' && buf instanceof AudioBuffer) {
+        bank.set(key, buf);
+      }
+    }
+    setSampleBank(bank);
   }
 }

@@ -66,8 +66,13 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   `AudioBackend` transversal (ctx/master/musicGain/noiseBuffer) que a fachada
   `AudioService` provê. `SynthAudioTheme.ts` é a 1ª implementação = a síntese
   procedural neon atual **realocada** (blip/sweep/arp/noiseBurst, trilha em 4
-  camadas, `MUSIC_PRESETS`). Um `SampleAudioTheme` futuro (P10-12) entra aqui sem
-  tocar a fachada. O preset de trilha (cosmético `music`) é **por-tema**. Ver TD-29.
+  camadas, `MUSIC_PRESETS`). `SampleAudioTheme.ts` (P10-12) é o par sonoro do
+  "Polido": toca SFX por `AudioBufferSource` e a trilha por faixas em loop com
+  cross-fade, **caindo no synth por cue/trilha** onde faltar buffer (híbrido, como
+  `SpriteTheme`→vetorial). `sampleManifest.ts` (puro) fixa as chaves (`aud-sfx-*`/
+  `aud-music-*`) e o mapa camadas→cross-fade (`trackMix`); `sampleBank.ts` é o
+  registro singleton que o `PreloadScene` popula com os `AudioBuffer` decodificados
+  pelo Phaser. O preset de trilha (cosmético `music`) é **por-tema**. Ver TD-29/TD-32.
 - **`src/data/`**: JSON de patterns/enemies/bosses/waves/**stages**/**ships** +
   difficulty/player/combat/**effects/audio**.
 - **`src/render/`** (Phaser, presentation-only — P10-02): **temas de render**.
@@ -82,6 +87,32 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   loop). A `GameScene` cria o tema e **delega** o desenho. Ver TD-28.
   `createRenderer.ts` (P10-04) resolve o `rendererId` do registro de temas para a
   implementação concreta — costura Phaser-side que mantém o registro dado puro.
+  **`SpriteTheme.ts` (P10-09)** é o tema "Polido": **herda** o `VectorTheme` e
+  sobrescreve só os *seams* por entidade (`drawShip`/`drawEnemies`/`drawBoss` +
+  `makeShip`, agora `protected` no pai), desenhando **sprites** lendo as mesmas
+  posições da sim e **caindo no vetorial** onde faltar asset. **Balas e anel de
+  graze não são seams ⇒ seguem vetoriais nos dois temas.** A decisão asset×
+  fallback é **pura** em `spriteFallback.ts` (convenção `spr-<categoria>`,
+  testável headless); `SpritePool.ts` pré-aloca sprites de inimigos (sem `new` no
+  loop, ociosos invisíveis). Cor do cosmético via `setTint` (Phaser 4). Ver TD-31.
+  **Tema × cosmético (P10-13):** `resolveShipSprite` (em `spriteFallback`, puro)
+  resolve a nave no sprite numa cadeia — variante curada `spr-ship-<id>` → arte
+  default tingida → silhueta vetorial; a **cor** herda sempre (tint), só a
+  **forma** depende de variante curada (arte exigida só onde se cura, sem explosão
+  combinatória). `ThemeCosmetics.shipId` carrega o id para essa resolução. Balas/
+  anel seguem vetoriais; o preview do Hangar é consciente do tema (`hangarPreview`,
+  puro — sprite×vetorial pela textura carregada). Ver TD-33.
+  **`shipVisual.ts` (P10-10)** é o mapeamento PURO estado→transform da nave
+  (Foco→escala, i-frames→alpha, pulso da chama), **compartilhado** por vetorial e
+  sprite — o tema troca só o CORPO (silhueta ↔ sprite), o feel é idêntico. A nave
+  sprite mora no mesmo container (chama + sprite + ponto de hitbox vetorial), então
+  o `drawShip` herdado vale para ambos. O **contrato de asset por entidade** (chave,
+  origem/centro = posição da sim, escala de referência, estados→variação) está em
+  `docs/ASSET_CONTRACT.md` — fluxo repetível para chefe/inimigos. **`parallaxBackground.ts`
+  (P10-11)** é a lógica PURA do fundo raster (camadas/velocidades de
+  `data/polishedBackground.json`, offset de tiling testável headless); o
+  `SpriteTheme` rola `TileSprite`s por camada quando há assets de fundo, senão
+  delega ao fundo procedural do pai (P10-07). Tudo presentation-only.
 - **`src/scenes/`** (Phaser): Boot, Preload, Menu, Game, Pause, Results. A
   `GameScene` é o **driver de apresentação** (loop, input, áudio, HUD textual,
   botões, anúncios de estágio e hit-stop) e **delega todo o desenho do mundo** ao
@@ -100,9 +131,15 @@ Scenes (Phaser) <── leem estado autoritativo ┘  (pools, player, boss, stat
   createRenderer` e `services/audio/createAudioTheme` resolvem id→implementação.
   Tema é **estado do jogador** (chave `hairline.theme.v1` no `SaveService`,
   presentation-only, **fora da sim/replay/hash/Diário**). O `PreloadScene`
-  carrega só `assets` do tema ativo (vetorial = nenhum); a `GameScene` resolve o
-  tema no `create()` (renderer via `createRenderer`, áudio via
-  `AudioService.useAudioTheme` — no-op se já ativo) sem lookup no loop. Ver TD-30.
+  carrega só `assets` do tema ativo (vetorial = nenhum) — sprites por `image` e
+  áudio por `audio` (decodificado e registrado no `sampleBank` no `create()`,
+  P10-12); a `GameScene` resolve o tema no `create()` (renderer via
+  `createRenderer`, áudio via `AudioService.useAudioTheme` — no-op se já ativo) sem
+  lookup no loop. Ver TD-30.
+  **PWA por tema (P10-09/12):** o `vite-plugin-pwa` exclui `sprites/**` e `audio/**`
+  do precache (`globIgnores`) — assets de tema não-default vão para `dist/` e são
+  buscados sob demanda, sem inchar o arcade. Manter sincronizado com os manifestos
+  de `themes`.
 - **`src/config/`**: `layout` (virtual 720×1280, 60Hz), `gameConfig`, `sceneKeys`,
   **`about`** (P6-06: fonte única de versão via `__APP_VERSION__` injetado por
   `define`, estúdio, URL do jogo, frase de share e links de doação) e

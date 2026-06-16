@@ -52,6 +52,13 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Assets de TEMA não-default ficam fora do precache: o arcade é o default
+        // e não pode "engordar" baixando arte (P10-09) nem áudio (P10-12) do tema
+        // "Polido". São carregados sob demanda pelo `PreloadScene` só quando o
+        // tema está ativo (carga condicional). `sprites/` e `audio/` espelham os
+        // manifestos de `config/themes`. (Áudio também não casa `globPatterns`,
+        // mas o ignore deixa a intenção explícita e protege formatos futuros.)
+        globIgnores: ['**/sprites/**', '**/audio/**'],
       },
     }),
   ],
