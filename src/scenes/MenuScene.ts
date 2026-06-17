@@ -280,9 +280,19 @@ export class MenuScene extends Phaser.Scene {
       ).setInteractive({ useHandCursor: true });
       overlay.add(label);
       label.on('pointerdown', () => {
+        if (t.id === current) {
+          overlay.destroy();
+          return;
+        }
         getSave().setSelectedThemeId(t.id);
-        getAudio().useAudioTheme(t.audioThemeId);
-        overlay.destroy();
+        // Trocar de tema muda o MANIFESTO de assets (sprites + samples do
+        // "Polido"), que é carregado SÓ no `PreloadScene` (condicional ao tema
+        // salvo). Sem recarregar, o `SpriteTheme` não acharia as texturas e
+        // cairia todo no vetorial (e o áudio no synth) — o tema "não mudaria".
+        // Re-rodar o preload carrega o que faltar (chaves já em cache são
+        // puladas pelo loader) e volta ao menu com tudo pronto. `useAudioTheme`
+        // é refeito no `PreloadScene`/`GameScene` a partir do tema salvo.
+        this.scene.start(SceneKeys.Preload);
       });
     });
 

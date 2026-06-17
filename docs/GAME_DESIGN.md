@@ -251,7 +251,9 @@ graze continuam vetoriais por cima** do sprite (hitbox ≠ sprite): a arte nunca
 esconde a zona de risco nem compete com as balas (que também seguem neon). Sem a
 arte registrada, a nave volta ao vetorial sem erro. O **contrato de asset**
 (chave, centro = posição da sim, escala de referência, estados→variação) está em
-`docs/ASSET_CONTRACT.md`; chefe e inimigos seguem o mesmo fluxo.
+`docs/ASSET_CONTRACT.md`; chefe e inimigos seguem o mesmo fluxo e também já têm
+arte raster (corpo do chefe + pool de sprites de inimigos; barra de vida, escudo,
+partes e telegraph do chefe seguem vetoriais por legibilidade).
 
 ### Fundo de espaço raster (P10-11)
 

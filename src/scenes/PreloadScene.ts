@@ -3,6 +3,7 @@ import { SceneKeys } from '../config/sceneKeys';
 import { VIRTUAL_WIDTH, VIRTUAL_HEIGHT } from '../config/layout';
 import { resolveTheme } from '../config/themes';
 import { getSave } from '../services/SaveService';
+import { getAudio } from '../services/AudioService';
 import { setSampleBank } from '../services/audio/sampleBank';
 
 /**
@@ -64,6 +65,10 @@ export class PreloadScene extends Phaser.Scene {
     // `SampleAudioTheme` lê. Só as chaves efetivamente decodificadas entram —
     // arquivo ausente (loaderror) simplesmente cai no synth (fallback por cue).
     this.registerSampleBank();
+    // Tema de áudio do tema ATIVO já com o banco de samples pronto: garante que
+    // o menu (e o que vier antes do `GameScene`) soe pelo tema certo logo após
+    // uma troca de tema (que re-roda este preload). Sem samples, cai no synth.
+    getAudio().useAudioTheme(resolveTheme(getSave().getSelectedThemeId()).audioThemeId);
     this.scene.start(SceneKeys.Menu);
   }
 

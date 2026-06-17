@@ -1,9 +1,11 @@
 # Contrato de asset por entidade — tema "Polido" (P10-10)
 
 > Como integrar arte raster ao `SpriteTheme` **uma peça por vez** sem quebrar o
-> jogo. A nave é a primeira peça (feita); **chefe e inimigos repetem este mesmo
-> fluxo**. Produzir a arte é tarefa de conteúdo; o código é só integração — um
-> placeholder valida o slot e a arte final entra depois pelo mesmo lugar.
+> jogo. A nave foi a primeira peça; **chefe e inimigos seguiram este mesmo fluxo**
+> e hoje as três categorias têm arte final integrada. Produzir a arte é tarefa de
+> conteúdo; o código é só integração — um placeholder valida o slot e a arte final
+> entra depois pelo mesmo lugar (foi assim que a arte final substituiu os
+> placeholders, sem mudar código).
 
 ## Princípios
 
@@ -43,9 +45,11 @@ Para cada entidade que ganha arte, defina:
      timeMs })` devolve `{ scale, alpha, engineScaleY }` (encolhe no Foco, pisca em
      i-frames, pulsa a chama). **Compartilhada por vetorial e sprite** ⇒ feel
      idêntico entre temas.
-   - **Inimigo:** tint pela cor da sim, rotação por `ageTicks`.
-   - **Chefe (futuro):** `phaseIndex` → variação (cor/quadro); escudo/partes/
-     telegraph/barra continuam **vetoriais** (legibilidade das regras).
+   - **Inimigo:** tint pela cor da sim, rotação por `ageTicks` (feito).
+   - **Chefe:** corpo como sprite, rotação por `tickCount` (feito); escudo/partes/
+     telegraph/barra de vida continuam **vetoriais** (legibilidade das regras). O
+     mapeamento `phaseIndex` → variação visual (cor/quadro) do corpo ainda **não**
+     foi feito — quando entrar, é só ler `boss.phaseIndex` no `drawBoss`.
 
 ## Fluxo para integrar uma peça (repetível)
 
@@ -65,11 +69,11 @@ Para cada entidade que ganha arte, defina:
 
 ## Estado por peça
 
-| Categoria | Chave       | Arte         | Mapeamento de estados            |
-| --------- | ----------- | ------------ | -------------------------------- |
-| Nave      | `spr-ship`  | placeholder  | `shipVisual` (Foco/i-frames/chama) ✅ |
-| Chefe     | `spr-boss`  | —            | `phaseIndex` (pendente)          |
-| Inimigos  | `spr-enemy` | —            | tint/rotação (pendente)          |
+| Categoria | Chave       | Arte      | Mapeamento de estados                              |
+| --------- | ----------- | --------- | -------------------------------------------------- |
+| Nave      | `spr-ship`  | final ✅  | `shipVisual` (Foco/i-frames/chama) ✅              |
+| Chefe     | `spr-boss`  | final ✅  | corpo+rotação ✅; `phaseIndex`→variação ainda vetorial |
+| Inimigos  | `spr-enemy` | final ✅  | tint/rotação ✅                                    |
 
 Ver `docs/TECH_DECISIONS.md` TD-31 (SpriteTheme + fallback + PWA por tema) e
 `docs/ARCHITECTURE.md` (`src/render/`).

@@ -7,8 +7,8 @@
 >
 > **Status:** ✅ feito · 🟡 parcial · ⬜ a fazer · ⏸️ adiado de propósito.
 > **Atualizado:** 2026-06 (Fase 4 em andamento; Fase 10 — temas visuais/áudio —
-> **código dos Blocos A/B/C entregue**; resta só **P10-10** = produção de arte
-> raster, incremental).
+> **código dos Blocos A/B/C entregue**; **P10-10** = arte raster do tema "Polido"
+> (nave/inimigos/chefe) integrada e finalizada).
 > **Convenção de ID:** `P{fase}-{nn}`. IDs nunca são reaproveitados.
 
 ## Resumo de progresso
@@ -399,15 +399,18 @@ Testes: **440 passando** (58 arquivos). Ver `TEST_STRATEGY.md`.
   Tema **"Polido"** registrado (placeholder da nave ⇒ prova do fallback parcial).
   Sem nova lógica de jogo. Ver TD-31, `docs/issues/P10-09-sprite-theme-fallback.md`.
 
-- 🟡 **P10-10** **Arte raster incremental:** nave → chefes → inimigos (nesta
+- ✅ **P10-10** **Arte raster incremental:** nave → chefes → inimigos (nesta
   ordem), cada peça substituível sem quebrar o jogo (o que não tem arte continua
   vetorial). Mapear estados visuais aos dados já existentes (dano/i-frames, fase do
-  chefe, partes, escudo). **Feito: fluxo + nave** — sprite no mesmo container da
+  chefe, partes, escudo). **Fluxo + nave** — sprite no mesmo container da
   silhueta (chama + hitbox/anel vetoriais por cima), feel idêntico via função pura
   compartilhada (`render/shipVisual`, testada headless), fallback comprovado.
-  **Contrato de asset** documentado (`docs/ASSET_CONTRACT.md`) para repetir.
-  **Pendente:** arte de **chefes** e **inimigos** (mesmo fluxo — sub-sessões
-  P10-10a/b). Ver TD-31, `docs/issues/P10-10-arte-raster-incremental.md`.
+  **Contrato de asset** documentado (`docs/ASSET_CONTRACT.md`). **Inimigos** (pool
+  de sprites, tint/rotação) e **chefe** (corpo+rotação; barra/escudo/partes/
+  telegraph seguem vetoriais) integrados pelo mesmo fluxo; arte final das três
+  categorias substituiu os placeholders sem mudar código. Única nuance pendente:
+  `phaseIndex`→variação visual do corpo do chefe (mecânica segue vetorial). Ver
+  TD-31, `docs/issues/P10-10-arte-raster-incremental.md`.
 
 - ✅ **P10-11** **Fundo de espaço em arte (parallax raster).** Camadas ilustradas
   (`TileSprite`) com tiling vertical + parallax por dados (`data/
