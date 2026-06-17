@@ -50,9 +50,8 @@ export const DEFAULT_THEME_ID = 'arcade';
  *   exclui esses assets do precache para não inchar o arcade. Áudio pelo tema
  *   `sample` (P10-12, `SampleAudioTheme`): toca por buffers e cai no synth onde
  *   faltar conteúdo. A chave de cada sprite segue `spr-<categoria>`
- *   (ver `render/spriteFallback`): registrar a chave habilita a categoria; o
- *   resto segue vetorial. Hoje só a **nave** tem placeholder ⇒ prova do fallback
- *   parcial (nave por sprite, inimigos/chefe vetoriais).
+ *   (ver `render/spriteFallback`): registrar a chave habilita a categoria; onde
+ *   faltar arte, o resto segue vetorial.
  */
 const THEMES: readonly ThemeDefinition[] = [
   {
@@ -68,13 +67,18 @@ const THEMES: readonly ThemeDefinition[] = [
     rendererId: 'sprite',
     audioThemeId: 'sample',
     assets: [
-      { key: 'spr-ship', url: 'sprites/ship-placeholder.svg', type: 'image' },
+      { key: 'spr-ship', url: 'sprites/ship.png', type: 'image' },
+      { key: 'spr-ship-ship-default', url: 'sprites/ship-ship-default.png', type: 'image' },
+      { key: 'spr-ship-ship-prism', url: 'sprites/ship-ship-prism.png', type: 'image' },
+      { key: 'spr-ship-ship-comet', url: 'sprites/ship-ship-comet.png', type: 'image' },
+      { key: 'spr-enemy', url: 'sprites/enemy.png', type: 'image' },
+      { key: 'spr-boss', url: 'sprites/boss.png', type: 'image' },
       // Fundo raster por camadas (P10-11): tileáveis, parallax por dados
       // (`render/parallaxBackground`). Carregam só no "polido"; fora do precache
       // PWA (path `sprites/`). Sem eles, o fundo cai no procedural (fallback).
-      { key: 'spr-bg-far', url: 'sprites/bg-far.svg', type: 'image' },
-      { key: 'spr-bg-nebula', url: 'sprites/bg-nebula.svg', type: 'image' },
-      { key: 'spr-bg-near', url: 'sprites/bg-near.svg', type: 'image' },
+      { key: 'spr-bg-far', url: 'sprites/bg-far.png', type: 'image' },
+      { key: 'spr-bg-nebula', url: 'sprites/bg-nebula.png', type: 'image' },
+      { key: 'spr-bg-near', url: 'sprites/bg-near.png', type: 'image' },
       // Áudio por samples (P10-12): SFX por cue + faixas calm/intense do preset
       // `default` (cross-fade). Chaves seguem a convenção de `audio/sampleManifest`
       // (`aud-sfx-*` / `aud-music-*`). Carregam só no "polido"; fora do precache
