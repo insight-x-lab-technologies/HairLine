@@ -6,9 +6,11 @@
 > aqui ficam status e escopo curto de cada item.
 >
 > **Status:** ✅ feito · 🟡 parcial · ⬜ a fazer · ⏸️ adiado de propósito.
-> **Atualizado:** 2026-06 (Fase 4 em andamento; Fase 10 — temas visuais/áudio —
-> **código dos Blocos A/B/C entregue**; **P10-10** = arte raster do tema "Polido"
-> (nave/inimigos/chefe) integrada e finalizada).
+> **Atualizado:** 2026-06-17 (Fase 4 em andamento; Fase 10 — temas visuais/áudio —
+> **máquina dos Blocos A/B/C entregue** com placeholders; **Fases 11 e 12 abertas**
+> a partir do estudo de look & feel sobre os mockups conceituais `ref/v1_*.png`:
+> Fase 11 = toolkit de UI procedural + repaginação das telas de menu; Fase 12 =
+> arte final do gameplay (tema "Polido") + bloom).
 > **Convenção de ID:** `P{fase}-{nn}`. IDs nunca são reaproveitados.
 
 ## Resumo de progresso
@@ -22,7 +24,9 @@
 | 4 | Profundidade de conteúdo | 🟡 em andamento |
 | 5 | Polimento, "juice" e áudio | 🟡 P5-01/02/04 feitas; falta P5-05/06 |
 | 6–9+ | Meta-jogo → visão | ⬜ a fazer |
-| 10 | Repaginação visual & áudio: temas selecionáveis | ⬜ planejada (priorizada) |
+| 10 | Repaginação visual & áudio: temas selecionáveis | 🟡 máquina entregue; arte/áudio final → Fase 12 |
+| 11 | Repaginação de UI: toolkit procedural + telas de menu | ⬜ planejada (priorizada) |
+| 12 | Repaginação do gameplay: arte do "Polido" + bloom | ⬜ planejada (priorizada) |
 
 Contagem atual de conteúdo: **9 padrões de bala, 7 inimigos, 5 chefes, 5 ondas
 autorais, 3 estágios curados, 3 classes de nave**.
@@ -440,6 +444,204 @@ Testes: **440 passando** (58 arquivos). Ver `TEST_STRATEGY.md`.
   Preview do Hangar **consciente do tema** (`hangarPreview`, puro). Presentation-
   only: nada toca a sim ⇒ determinismo intacto (484 testes verdes). Ver TD-33,
   `docs/issues/P10-13-tema-x-cosmeticos.md`.
+
+---
+
+## FASE 11 — Repaginação de UI: toolkit procedural + telas de menu ⬜
+
+> **Origem (2026-06-17).** Sessão de análise de look & feel sobre os mockups
+> **conceituais** em `ref/v1_*.png` (Home, Conquistas, Hangar) comparados ao estado
+> atual (`ref/v0_*.jpeg`). Objetivo: elevar a "pele" das telas de menu de
+> "programmer-art monospace" para acabamento de jogo mobile profissional — **só
+> look & feel, sem novas funcionalidades de jogo.**
+>
+> **Decisão macro — ficar no Phaser (sem camada DOM/HTML+CSS).** Cards, botões,
+> gradientes, glow, hexágonos, chevrons e divisórias são **procedurais** no Phaser
+> 4.1 — `Graphics.fillRoundedRect`/`fillGradientStyle`, pipeline de FX
+> `addGlow`/`addBlur`/`addShadow`/`addGradient` (confirmados no build), `BitmapText`,
+> "assar" em `RenderTexture`. Logo o receio de "uma imagem por botão" **não se
+> concretiza nem em CSS nem em Phaser** — a contagem de imagens da casca de UI é
+> ≈0 nos dois caminhos. Ficar no Phaser evita rever a arquitetura visual, mantém
+> **um só pipeline** de render alinhado ao Scale Manager (FIT) e às safe-areas, e é
+> consistente com o gameplay. O custo é mais **código de desenho** (vs. uma linha
+> de CSS), pago **uma vez** num toolkit reutilizável. *(O caminho DOM/CSS foi
+> avaliado e descartado: não reduziria imagens — só trocaria o trabalho de lugar e
+> adicionaria uma camada arquitetural nova.)*
+>
+> **Reuso é a tese central.** O mesmo vocabulário de `painel`/`botão`/tipografia
+> serve **Home, Conquistas, Hangar, Stats e Results** (e a casca do HUD de
+> gameplay — pílulas/hexágonos). As três telas conceituais confirmam a mesma
+> linguagem de cards. **Construir o toolkit primeiro** e aplicá-lo em sequência.
+>
+> **Orçamento de imagens desta fase: ≈0.** Apenas fonte(s) (WebFont/BitmapText) e,
+> no máximo, **1 atlas de ícones** (ou glifos/vetor). A **nave-herói** da Home
+> **não** é asset desta fase — reaproveita o sprite produzido na Fase 12.
+>
+> **Ignorar (conceito visual apenas):** barra de moeda/gemas, badge de rank/nível
+> e contadores de economia dos mockups — são features, fora de escopo. Onde o
+> layout pedir um "slot de número", usar **dado que já existe** (recorde, total de
+> runs, X/Y de conquistas).
+>
+> **Determinismo / risco ≈ zero.** Presentation-only: `MenuScene` e demais cenas de
+> menu não tocam `src/sim`/replay/`hashState()`/ranking.
+>
+> **Supersede TD-26** (que fixou a home como "neon vetorial procedural, **sem
+> assets raster**"). A Fase 10 já legitimou um pipeline de assets; ao escrever a
+> SDD do P11-06, **registrar um novo TD** documentando a virada (toolkit procedural
+> no Phaser + 1 hero raster reusado).
+
+- ⬜ **P11-01** **Design tokens + tipografia.** Módulo de tokens **PURO** (paleta
+  neon por papel/estado — primária/ciano, destaque/dourado, perigo/rosa,
+  esmaecido; raios de canto, espaçamentos, larguras de borda, presets de
+  sombra/glow), no espírito de `ui/home`/`ui/hudLayout` (testável headless).
+  Tipografia: adotar **BitmapText** (nitidez/perf) **ou** um **WebFont** display
+  (via `@font-face` no `index.html` + loader, para o canvas usar), substituindo o
+  `fontFamily: 'monospace'` de `ui/neonText`. **Contexto p/ SDD:** escolher 1–2
+  fontes (título display + corpo), licença/peso, fallback; definir como `neonText`
+  evolui para ler tokens e se a assinatura é mantida. Sem tocar a sim.
+
+- ⬜ **P11-02** **Helper de FX (glow/blur/shadow) com fallback.** *Spike* +
+  wrapper único: confirmar a API de FX do Phaser **4.1** (`preFX`/`postFX`
+  `addGlow`/`addBlur`/`addShadow`/`addGradient`; ⚠️ Phaser 4 ≠ 3 — validar uso
+  real, não copiar de Phaser 3). **Fallback obrigatório:** glow por **camadas de
+  alpha empilhadas** (técnica já usada em `MenuScene.drawHeroTitle`) onde o FX
+  divergir/pesar. **Perf:** aplicar FX em objetos estáticos / `RenderTexture`
+  assado, **nunca** por frame no menu. Serve as Fases 11 e 12 (o bloom do gameplay
+  reusa este helper).
+
+- ⬜ **P11-03** **`ui/panel` — componente de card.** Modelo de layout **PURO** +
+  desenho no Phaser: retângulo de cantos arredondados, **fill em gradiente**,
+  borda neon, glow, badge de ícone à esquerda (opcional), título, subtítulo,
+  chevron à direita (opcional) e **estados**: normal / selecionado (realce ciano +
+  ✓) / travado (🔒 + condição, esmaecido) / destaque (dourado, p/ o Diário).
+  Assado em `RenderTexture` quando estático. **Variantes** que cobrem as telas:
+  card de modo grande (Home), linha vertical (Conquistas), card horizontal
+  (Hangar), painel de preview (Hangar). **Contexto p/ SDD:** API (props/posições)
+  e como `ui/home`/`ui/hangar`/`ui/achievements` alimentam os cards.
+
+- ⬜ **P11-04** **`ui/button` — botão.** Hexagonal (recorte via polígono/
+  `fillPoints`) e retangular; glow; estados toque/hover/press; rótulo +
+  sub-rótulo + ícone. Estilo **primário** (JOGAR, APLICAR) e **secundário**
+  (VOLTAR). Coerente com `useHandCursor`. Reusa o helper de FX (P11-02) e os
+  tokens (P11-01).
+
+- ⬜ **P11-05** **Iconografia.** Conjunto de ícones de modo (Endless ∞, Estágios ◆,
+  Diário ◎, Boss Rush ☠, Evento ⚡), meta (Hangar/Conquistas/Stats), conquista
+  (★/🔒) e utilidades (engrenagem, som, pausa). **Decisão p/ SDD:** começar por
+  **vetor desenhado** (`Graphics`/`ui/shapes`) ou **glifos de fonte**; promover a
+  **1 atlas SVG** só se quiser mais capricho. Definir chaves e fallback. Mantém o
+  orçamento de imagens ≈0.
+
+- ⬜ **P11-06** **Home repaginada** (`ref/v1_MenuPrincipal.png`). Aplicar o
+  toolkit: hero "HAIRLINE" (título display + glow em camadas), tagline, **slot de
+  nave-herói** (reusa sprite da Fase 12; placeholder até lá) com anel de graze +
+  rastros procedurais e callouts GRAZE/PODER, **5 cards de modo** (Endless /
+  Estágios / **Diário em destaque dourado** / Boss Rush / Evento Semanal) com
+  ícone + título + subtítulo + chevron, **botão primário** de início, fileira de
+  meta (Hangar/Conquistas/Stats) como botões e rodapé (share/doação/versão).
+  Reusa o modelo `ui/home` (estendido com as caixas dos cards) e **mantém intacta**
+  a lógica de `start()`/payloads e o gating do Diário (força nave default).
+  **Consolidar utilidades** hoje dispersas (nome, esquema de controle, tema,
+  haptics) atrás de uma **engrenagem** → painel de settings (usa `ui/panel`/
+  `ui/button`). **Registrar o novo TD** (supersede TD-26).
+
+- ⬜ **P11-07** **Conquistas repaginada** (`ref/v1_Conquistas.png`). Lista vertical
+  de cards: badge ★ (desbloqueada, com data) / 🔒 (travada, com condição), título
+  + subtítulo, realce das desbloqueadas; header + pílula "X/Y"; botão VOLTAR.
+  Reusa `AchievementsScene` + `ui/achievements` (dado intacto) e o toolkit.
+  **Reuso ~100%** — menor item da fase, bom primeiro teste do toolkit.
+
+- ⬜ **P11-08** **Hangar repaginado** (`ref/v1_Hangar.png`). Seções NAVE / TIRO /
+  TRILHA como **fileiras horizontais de cards** com estados selecionado/travado;
+  **painel de preview** grande (sprite da nave sobre pódio com glow — reusa o
+  sprite da Fase 12; TIRO = orbes coloridos procedurais, TRILHA = rastros
+  procedurais); botões VOLTAR / APLICAR. Reusa `ui/hangar` (preview honesto por
+  tema) + toolkit. **Sem imagens próprias** (thumbnails da nave reaproveitam o
+  sprite de gameplay).
+
+- ⬜ **P11-09** **Stats e Results repaginadas.** Aplicar o mesmo vocabulário
+  (cards/pílulas/botões/tokens) à `StatsScene` (totais, recordes por modo,
+  histórico) e à `ResultsScene` (placar, ranking, share, verify, toasts de
+  conquista), por consistência visual. Sem novo dado/lógica.
+
+- ⬜ **P11-10** **Casca do HUD de gameplay (ponte p/ Fase 12)** (`ref/v1_GamePlay1.png`).
+  Aplicar o toolkit só à **moldura** do HUD: pílula de score, botões hexagonais de
+  pausa/música, botão + barra de PULSO. **Presentation-only**: o playfield (balas,
+  nave, inimigos) **não** é tocado aqui — isso é a Fase 12. Manter o HUD textual
+  legível e respeitar safe-areas (`hudLayout`).
+
+---
+
+## FASE 12 — Repaginação do gameplay: arte do "Polido" + bloom ⬜
+
+> **Origem (2026-06-17), mesmo estudo da Fase 11.** Mockup de gameplay em
+> `ref/v1_GamePlay1.png` vs. atual (`ref/v0_GamePlay1/2.jpeg`). Salto desejado:
+> fundo de nebulosa rico, **nave e inimigos ilustrados**, **bloom/glow** nas balas
+> e no motor — sem perder a legibilidade do gênero.
+>
+> **Achado-chave — já está arquitetado.** O gameplay v1 ≈ **ativar o tema "Polido"
+> que a Fase 10 já construiu vazio** (`SpriteTheme` P10-09, arte incremental
+> P10-10, fundo raster P10-11, samples P10-12, cruzamento cosméticos P10-13). Esta
+> fase é **produção de arte + tuning de FX**, **não** código novo de gameplay.
+> Balas e anel de graze **permanecem vetoriais neon** nos dois temas (TD-31,
+> legibilidade > beleza) — e o v1 confirma (balas seguem orbes/diamantes
+> brilhantes).
+>
+> **"Novo estilo de imagem e tiro" (Hangar + Gameplay):** a **nave/inimigos** viram
+> **sprites ilustradas** (tingíveis — branco/grayscale, TD-33/`ASSET_CONTRACT`;
+> **chefe full-color**); o **tiro/balas** continuam **procedurais/vetoriais** — o
+> "novo estilo" é **bloom + forma** (orbe/diamante via `Graphics`), **não imagem**.
+> O cosmético de TIRO segue sendo cor procedural.
+>
+> **Orçamento de imagens: ~6 sprites** (nave, inimigo, chefe, 3 camadas de fundo) —
+> todos já contratados em `THEME_ASSET_GUIDE` e **geráveis por IA**; variantes
+> curadas de nave por cosmético são **opcionais** (TD-33). **A nave é
+> reaproveitada** em gameplay + Hangar + hero da Home (1 arte, 3 usos).
+>
+> **Determinismo / risco ≈ zero:** tema é presentation-only, fora de
+> sim/replay/hash/Diário. Ativar/trocar tema não muda hash/replay/ranking.
+>
+> **Decisão a registrar na SDD:** promover o "Polido" a **tema default**, mantendo
+> o "Arcade" vetorial como alternativa (acessibilidade/perf, P5-05/06). A
+> repaginação de menus (Fase 11) **não** é theme-gated (vale sempre); só o **render
+> de gameplay** passa pelo sistema de temas.
+
+- ⬜ **P12-01** **Bloom/glow no gameplay (FX).** Aplicar bloom às balas, tiros do
+  jogador, chama do motor, anel de graze e pulso, via o helper de FX (P11-02). É
+  **aqui** que mora o "novo estilo de tiro" (forma vetorial + bloom), **não** em
+  imagens. **Perf:** orçamento de frame no celular + **toggle de qualidade**
+  (alinhar com P5-06); bloom desligável em "qualidade baixa". Render-only ⇒
+  determinismo intacto. Vale para os dois temas (o vetorial também ganha bloom).
+
+- ⬜ **P12-02** **Arte da nave (sprite) — `spr-ship` (+ variantes).** Produzir a
+  nave ilustrada (IA; `THEME_ASSET_GUIDE §4.2/§10`: **branco/grayscale tingível**,
+  nariz p/ cima, footprint 64px, **sem chama/anel/hitbox**). Opcional: variantes
+  curadas `spr-ship-ship-prism`/`-comet` (TD-33). **Reusada** no Hangar (P11-08) e
+  no hero da Home (P11-06). Integração já pronta (P10-10).
+
+- ⬜ **P12-03** **Arte dos inimigos — `spr-enemy`.** Sprite genérico radial/
+  simétrico (lê em qualquer rotação), **branco/grayscale tingível** pela cor de
+  perigo da sim (`§4.4`). IA. Pool de sprites já pronto (P10-10).
+
+- ⬜ **P12-04** **Arte do chefe — `spr-boss`.** Casco **full-color** (não tingido);
+  mecânicas (barra/escudo/partes/telegraph/núcleo) seguem **vetoriais por cima**
+  (`§4.5`). IA. Nuance pendente de P10-10: `phaseIndex`→variação visual do corpo.
+
+- ⬜ **P12-05** **Fundo em arte (parallax raster).** 3 camadas `spr-bg-far/
+  nebula/near`, 720×1280 **tileáveis verticalmente**, baixo contraste,
+  transparentes (`§4.6`). IA. Máquina pronta (P10-11); **todas-ou-nenhuma**, senão
+  cai no procedural (P10-07).
+
+- ⬜ **P12-06** **Áudio real (samples) — conteúdo final (opcional/depois).** A
+  máquina (`SampleAudioTheme`, P10-12) e os placeholders já existem; falta produzir
+  os WAVs finais (4 SFX núcleo → 11 cues; stems calm/intense por preset,
+  `THEME_ASSET_GUIDE §5`). Fora do foco visual; listado para fechar o tema.
+
+- ⬜ **P12-07** **Integração & QA do "Polido" + promover a default.** Conferência
+  manual (`npm run dev`): paridade com o v1, FPS no celular, peso/PWA (assets só do
+  tema ativo, fora do precache), **legibilidade** (balas/anel sobre o fundo) e
+  daltonismo (P5-05). **Definir o "Polido" como tema default** mantendo o "Arcade"
+  selecionável. Regressão de determinismo verde.
 
 ---
 

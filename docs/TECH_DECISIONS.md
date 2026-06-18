@@ -289,6 +289,17 @@ web confiável; **Instagram/TikTok não têm** intent web de texto/URL ⇒ caem 
 URLs do jogo e de doação (Ko-fi / Buy Me a Coffee) centralizadas em `config/about`
 (dados separados de código). Doação adianta P7-01 (monetização não-invasiva).
 
+> **Revisão (2026-06-17) — em revisitação pela Fase 11.** A premissa "home **sem
+> assets raster** / sem pipeline raster" está **superada**: a Fase 10 (TD-30/31/32/33)
+> já entregou um pipeline de assets de tema (sprites + carga condicional + exclusão
+> do precache PWA). A **Fase 11** repagina a home (e demais telas de menu) com um
+> **toolkit de UI procedural no Phaser** (cards/botões/glow via `Graphics`+FX, sem
+> camada DOM/CSS) e **reaproveita 1 nave-herói raster** produzida na Fase 12 — não
+> mais "0 raster". Seguem **válidos**: a estética neon, o layout por modelo PURO
+> (`ui/home`) e o princípio de que a home é **presentation-only** (fora de
+> sim/replay/hash). Um TD dedicado será registrado quando o **P11-06** sair (vide
+> ROADMAP Fases 11/12).
+
 ## TD-27 — Controle de toque relativo: sensibilidade NÃO entra na sim (P10-01) ✅
 **Problema:** no celular o `InputService` emitia a posição **absoluta** do dedo e
 a nave perseguia esse ponto ⇒ o dedo cobria a nave e a hitbox (não dava para ver
